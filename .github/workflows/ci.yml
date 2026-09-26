@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tendril
+          POSTGRES_PASSWORD: tendril
+          POSTGRES_DB: tendril
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      APP_URL: http://127.0.0.1:3000
+      DATABASE_URL: postgres://tendril:tendril@localhost:5432/tendril
+      BETTER_AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      CRON_SECRET: ci-only-cron-secret
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx next typegen
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run db:migrate
+      - run: npm run build
+      - name: Smoke test
+        run: |
+          node .next/standalone/server.js &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3000/api/health && break; sleep 1; done
+          curl -sf http://127.0.0.1:3000/ > /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/app)" = "307"

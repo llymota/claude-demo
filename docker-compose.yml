@@ -1,0 +1,34 @@
+# Local production-like stack: docker compose up --build
+# Put secrets in .env (see .env.example); compose reads it automatically.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tendril
+      POSTGRES_PASSWORD: tendril
+      POSTGRES_DB: tendril
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "tendril"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: { context: ., target: migrate }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://tendril:tendril@db:5432/tendril
+    depends_on:
+      db: { condition: service_healthy }
+
+  app:
+    build: { context: ., target: app }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://tendril:tendril@db:5432/tendril
+    ports: ["3000:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:

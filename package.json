@@ -1,27 +1,48 @@
 {
   "name": "tendril",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.18"
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:single": "tsc -b && vite build --mode single && node scripts/to-artifact.mjs",
-    "preview": "vite preview",
-    "typecheck": "tsc -b",
-    "test": "vitest run"
+    "dev": "next dev",
+    "build": "next build && node scripts/copy-standalone.mjs",
+    "start": "node .next/standalone/server.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@atproto/api": "^0.21.0",
+    "@atproto/jwk-jose": "^0.2.4",
+    "@atproto/oauth-client-node": "^0.5.7",
+    "@polar-sh/better-auth": "^1.8.4",
+    "@polar-sh/sdk": "^0.47.1",
+    "better-auth": "1.7",
+    "drizzle-orm": "^0.45.3",
+    "next": "^16.3.6",
+    "postgres": "^3.4.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/react": "^18.3.31",
-    "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react": "^4.7.0",
-    "typescript": "5.6",
-    "vite": "^6.4.3",
-    "vite-plugin-singlefile": "^2.3.3",
-    "vitest": "^3.2.7"
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.6",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
   }
 }

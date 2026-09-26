@@ -3,3 +3,8 @@ dist
 dist-single
 *.log
 *.tsbuildinfo
+.next
+.env*.local
+.env
+next-env.d.ts
+coverage

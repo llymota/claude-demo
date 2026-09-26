@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/*
+  Tendril design tokens. Monochrome by intent: hierarchy comes from weight, size,
+  rules and whitespace, never from color. The only non-grey is none.
+*/
+:root {
+  --bg: #ffffff;
+  --subtle: #f6f6f6;
+  --hover: #efefef;
+  --line: #e4e4e4;
+  --line-strong: #cfcfcf;
+  --ink: #0a0a0a;
+  --ink-2: #3d3d3d;
+  --muted: #6f6f6f;
+  --faint: #a3a3a3;
+  --inverse: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0a;
+    --subtle: #141414;
+    --hover: #1c1c1c;
+    --line: #262626;
+    --line-strong: #3a3a3a;
+    --ink: #f5f5f5;
+    --ink-2: #cfcfcf;
+    --muted: #9a9a9a;
+    --faint: #5c5c5c;
+    --inverse: #0a0a0a;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-subtle: var(--subtle);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-inverse: var(--inverse);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: var(--ink);
+    color: var(--inverse);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .rule {
+    border-top: 1px solid var(--line);
+  }
+  .field {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    color: var(--ink);
+    transition: border-color 0.12s;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+  .field::placeholder {
+    color: var(--faint);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
