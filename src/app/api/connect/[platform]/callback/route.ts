@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { log } from "@/lib/log";
 import { finishConnect, redirectUri } from "@/lib/oauth-state";
 import { bluesky } from "@/lib/providers/bluesky";
+import type { NodeOAuthClient } from "@atproto/oauth-client-node";
 import { BLUESKY_SCOPE, blueskyClient } from "@/lib/providers/bluesky-oauth";
 import { linkedinExchangeCode, linkedinUserInfo, LINKEDIN_SCOPES } from "@/lib/providers/linkedin";
 import { threads, threadsExchangeCode, THREADS_SCOPES } from "@/lib/providers/threads";
@@ -32,8 +33,26 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/connect/[pla
 
   if (q.get("error")) return done(req, session.user.id, { error: "You cancelled the connection" });
 
-  const state = await finishConnect(platform, q.get("state"), session.user.id);
-  if (!state) return done(req, session.user.id, { error: "The connection link expired. Try again." });
+  // Bluesky's OAuth client puts its own nonce in the URL's `state` and hands ours back from
+  // callback(), so it has to run first. It verifies its own state, PKCE and DPoP as it goes.
+  let returnedState = q.get("state");
+  let bskySession: Awaited<ReturnType<NodeOAuthClient["callback"]>>["session"] | null = null;
+  if (platform === "bluesky") {
+    try {
+      const r = await (await blueskyClient()).callback(q);
+      bskySession = r.session;
+      returnedState = r.state;
+    } catch (err) {
+      log.warn("connect.bluesky_callback_failed", { error: err });
+      return done(req, session.user.id, { error: "Bluesky didn't finish the connection. Try again." });
+    }
+  }
+
+  const state = await finishConnect(platform, returnedState, session.user.id);
+  if (!state) {
+    await bskySession?.signOut().catch(() => {});
+    return done(req, session.user.id, { error: "The connection link expired. Try again." });
+  }
 
   try {
     let profile: ProfileData;
@@ -43,8 +62,7 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/connect/[pla
 
     switch (platform) {
       case "bluesky": {
-        const { session: oauth } = await (await blueskyClient()).callback(q);
-        const agent = new Agent(oauth);
+        const agent = new Agent(bskySession!);
         credentials = { did: agent.assertDid };
         profile = await bluesky.getProfile({ id: "", externalId: agent.assertDid, handle: "", credentials }, noopSave);
         scopes = BLUESKY_SCOPE;
