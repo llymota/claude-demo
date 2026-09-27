@@ -86,6 +86,8 @@ export function env(): Env {
   if (cached) return cached;
   // Blank lines in .env files count as unset.
   const source = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== "")) as Record<string, string>;
+  // On Vercel, fall back to the project's production domain so a missing APP_URL doesn't break sign-in.
+  if (!source.APP_URL && source.VERCEL_PROJECT_PRODUCTION_URL) source.APP_URL = `https://${source.VERCEL_PROJECT_PRODUCTION_URL}`;
   const needs = ["BETTER_AUTH_SECRET", "TOKEN_ENCRYPTION_KEY", "CRON_SECRET"].some((k) => !source[k]);
   if (needs) for (const [k, v] of Object.entries(devDefaults())) source[k] ||= v;
   const parsed = schema.safeParse(source);
@@ -110,3 +112,22 @@ export const features = {
   ai: () => Boolean(env().ANTHROPIC_API_KEY),
   jev: () => Boolean(env().TYPESAFE_API_KEY),
 };
+
+/**
+ * Origins allowed to call the auth API. Sign-up fails with "Invalid origin" when the
+ * page's address isn't here, so this covers APP_URL, Vercel's deployment and preview
+ * domains, and any local port on localhost or 127.0.0.1 outside production.
+ */
+export function trustedOrigins(): string[] {
+  const e = env();
+  const out = new Set([new URL(e.APP_URL).origin]);
+  for (const k of ["VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]) {
+    const host = process.env[k];
+    if (host) out.add(`https://${host}`);
+  }
+  if (e.NODE_ENV !== "production") {
+    out.add("http://localhost:*");
+    out.add("http://127.0.0.1:*");
+  }
+  return [...out];
+}

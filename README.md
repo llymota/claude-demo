@@ -42,7 +42,7 @@ npm run dev        # http://127.0.0.1:3000
 
 That's it. Without a `DATABASE_URL`, Tendril starts an embedded Postgres in `.data/pglite` and migrates it, and generates its three secrets into `.data/dev-secrets.json`. Delete `.data` to start over.
 
-Use `127.0.0.1`, not `localhost`: Bluesky's OAuth loopback client requires it, and Bluesky works locally with no setup. To turn on the assistant and Autopilot, put `ANTHROPIC_API_KEY=...` in `.env.local` and restart. Without an email key, emails are printed to the terminal and verification is skipped. Every other integration switches on when its variables are set (see `.env.example`), and the UI shows "Not configured" until then.
+Open `http://127.0.0.1:3000`. `localhost` redirects there in development, because Bluesky's OAuth loopback client requires 127.0.0.1 and a session made on one address isn't visible on the other. Bluesky works locally with no setup. To turn on the assistant and Autopilot, put `ANTHROPIC_API_KEY=...` in `.env.local` and restart. Without an email key, emails are printed to the terminal and verification is skipped. Every other integration switches on when its variables are set (see `.env.example`), and the UI shows "Not configured" until then.
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. `npm run db:studio` opens the database.
 
@@ -50,7 +50,7 @@ Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. `npm r
 
 1. Import the repository in Vercel.
 2. Add a Postgres database (Neon from the Vercel Marketplace sets `DATABASE_URL` for you).
-3. Set `APP_URL` to your domain, plus `BETTER_AUTH_SECRET` (`openssl rand -base64 48`), `TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 32`), `CRON_SECRET` (`openssl rand -hex 24`), `ANTHROPIC_API_KEY`, and the integrations below.
+3. Set `APP_URL` to your domain (if you leave it out, Tendril uses the project's `*.vercel.app` production domain; preview deployments are trusted automatically), plus `BETTER_AUTH_SECRET` (`openssl rand -base64 48`), `TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 32`), `CRON_SECRET` (`openssl rand -hex 24`), `ANTHROPIC_API_KEY`, and the integrations below.
 4. Deploy. The `vercel-build` script applies migrations before every build.
 
 `vercel.json` runs `/api/cron/sync` once a day, which works on the Hobby plan: it syncs accounts, triages new rooms and runs each paid user's Autopilot. Accounts also sync whenever their owner opens the app. On Vercel Pro, change the schedule to `*/15 * * * *` for background sync every 15 minutes. Vercel sends `CRON_SECRET` as a bearer token; any other scheduler can do the same:

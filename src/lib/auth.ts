@@ -6,7 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { applyCustomerState } from "./billing/sync";
 import { db, schema } from "./db";
 import { sendEmail, templates } from "./email";
-import { env, features } from "./env";
+import { env, features, trustedOrigins } from "./env";
 import { log } from "./log";
 
 let polarClient: Polar | undefined;
@@ -54,7 +54,7 @@ function build() {
     appName: "Tendril",
     baseURL: e.APP_URL,
     secret: e.BETTER_AUTH_SECRET,
-    trustedOrigins: [e.APP_URL],
+    trustedOrigins: trustedOrigins(),
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: {
