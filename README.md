@@ -27,6 +27,7 @@ Your voice profile is learned from your own posts and refreshed every two weeks 
 - Next.js 16 (App Router, server actions, `proxy.ts`), React 19, Tailwind CSS 4
 - PostgreSQL with Drizzle ORM and checked-in migrations (`drizzle/`); PGlite (embedded Postgres) for local development
 - Claude via the Anthropic SDK: structured outputs for triage, drafts, voice and briefs; a streaming tool-use loop for the assistant; server-side fallbacks on every request; per-plan monthly AI credits
+- Jev by TypeSafe AI for classification: which topics a post is about, whether a room is bait or spam, whether an old post is too dated to reshare, and how strong a reply is. Jev answers typed questions with confidence scores; the weights and thresholds stay in code (`src/lib/classify.ts`)
 - Better Auth: email and password with verification and reset, optional Google and GitHub, DB-backed rate limits
 - Polar for billing: checkout, customer portal and webhooks via `@polar-sh/better-auth`
 - Platform APIs: Bluesky (atproto OAuth), X API v2 (OAuth 2.0 PKCE), Threads Graph API, LinkedIn (OpenID Connect)
@@ -82,6 +83,8 @@ Plan limits live in `src/lib/billing/plans.ts`. Customers are created in Polar o
 
 **Claude**: an API key from console.anthropic.com in `ANTHROPIC_API_KEY`. `AI_MODEL` defaults to `claude-opus-5`. Credits per plan are in `src/lib/billing/plans.ts`; usage is recorded per user per month in `ai_usage`.
 
+**Jev**: an API key from console.typesafe.ai in `TYPESAFE_API_KEY`. `JEV_MODEL` is pinned to `jev-1.13.0` because the thresholds in `src/lib/classify.ts` were set against it; retune them before moving to a newer version. Jev isn't charged against AI credits (it costs fractions of a cent per thousand calls). Without a key, the same spots use the rules in `src/lib/scoring.ts`.
+
 **Email**: a Resend API key and a verified sending domain in `EMAIL_FROM`.
 
 **Social sign-in** (optional): Google and GitHub OAuth apps with callback `{APP_URL}/api/auth/callback/google` and `/github`.
@@ -99,6 +102,8 @@ src/lib/autopilot.ts    the daily autonomous pass
 src/lib/providers       one adapter per platform behind a shared interface with capability flags
 src/lib/sync.ts         per-account sync: profile, posts, rooms, interactions, followers, attribution
 src/lib/scoring.ts      leverage, reply check, warmth, resurfacing, profile audit (unit tested)
+src/lib/classify.ts     questions for Jev and how its answers become tags, verdicts and grades (unit tested)
+src/lib/jev.ts          Jev client with a fallback to the rules
 src/lib/attribution.ts  follower attribution (unit tested)
 src/lib/db/schema.ts    database schema
 ```

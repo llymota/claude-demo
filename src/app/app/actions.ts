@@ -14,7 +14,8 @@ import { providerFor } from "@/lib/providers";
 import { blueskyClient } from "@/lib/providers/bluesky-oauth";
 import { NotAvailable, ReauthRequired } from "@/lib/providers/types";
 import { localDay } from "@/lib/queries";
-import { checkReply, leverage, tagTopics, topicWeights } from "@/lib/scoring";
+import { leverage, tagTopics, topicWeights, type ReplyCheck } from "@/lib/scoring";
+import { classifyRoom, gradeReply } from "@/lib/jev";
 import { requireUser, type Viewer } from "@/lib/session";
 import { runAutopilot } from "@/lib/autopilot";
 import { draftReply, learnVoice } from "@/lib/ai/tasks";
@@ -131,7 +132,8 @@ export async function addManualRoom(_: ActionResult | null, form: FormData): Pro
   if (!allowed.some((h) => host === h || host.endsWith(`.${h}`))) return fail(`That link isn't a ${acct.platform} post`);
 
   const topics = viewer.workspace.topics;
-  const tagged = tagTopics(parsed.data.text, topics);
+  const jev = await classifyRoom({ text: parsed.data.text, authorName: parsed.data.author }, topics);
+  const tagged = jev?.topics.length ? jev.topics : tagTopics(parsed.data.text, topics);
   const lev = leverage(
     { topics: tagged, ageMinutes: 30, replies: 0, velocity: 0, audienceOverlap: 0.1, authorFollowers: null, knownWarmth: null },
     { weights: topicWeights(topics), myFollowers: acct.followers },
@@ -151,6 +153,8 @@ export async function addManualRoom(_: ActionResult | null, form: FormData): Pro
       score: lev.score,
       breakdown: { fit: lev.fit, early: lev.early, reach: lev.reach, rapport: lev.rapport, windowMinutes: 240 },
       manual: true,
+      // You picked this one yourself, so Jev's verdict is advice and never hides it.
+      ...(jev ? { aiVerdict: jev.verdict, aiReason: jev.reason } : {}),
     })
     .onConflictDoUpdate({ target: [schema.room.accountId, schema.room.externalId], set: { text: parsed.data.text, status: "open" } })
     .returning({ id: schema.room.id });
@@ -174,7 +178,7 @@ async function replyAs(viewer: Viewer, input: z.infer<typeof replySchema>): Prom
   const r = await ownedRoom(viewer.user.id, parsed.data.roomId);
   if (!r) return fail("Room not found");
   const provider = providerFor(r.account.platform);
-  const check = checkReply(parsed.data.text);
+  const grading = gradeReply(parsed.data.text, r.room.text);
 
   let posted: { externalId: string; url: string } | null = null;
   if (parsed.data.mode === "post") {
@@ -198,6 +202,7 @@ async function replyAs(viewer: Viewer, input: z.infer<typeof replySchema>): Prom
     }
   }
 
+  const check = await grading;
   await db.insert(schema.reply).values({
     userId: viewer.user.id,
     accountId: r.account.id,
@@ -504,4 +509,12 @@ export async function deleteAccount(_: ActionResult | null, form: FormData): Pro
   await db.delete(schema.user).where(eq(schema.user.id, viewer.user.id));
   log.info("account.deleted", { userId: viewer.user.id });
   redirect("/?deleted=1");
+}
+
+/** Jev's grade for a reply in progress. The composer shows the instant rule-based grade until this arrives. */
+export async function gradeDraft(text: string, roomId?: string): Promise<ReplyCheck | null> {
+  const viewer = await requireUser();
+  if (!features.jev() || typeof text !== "string" || !text.trim() || text.length > 3000) return null;
+  const r = roomId ? await ownedRoom(viewer.user.id, roomId) : null;
+  return gradeReply(text, r?.room.text ?? null);
 }

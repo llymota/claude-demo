@@ -84,6 +84,7 @@ export default async function RoomPage(props: PageProps<"/app/rooms/[id]">) {
                 initialText={pendingDraft?.text}
                 initialRationale={pendingDraft?.rationale}
                 aiEnabled={features.ai()}
+                jevEnabled={features.jev()}
               />
             )}
           </div>

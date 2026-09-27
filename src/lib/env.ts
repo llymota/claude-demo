@@ -46,6 +46,9 @@ const schema = z.object({
   /** Turns on the assistant and Autopilot. */
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default("claude-opus-5"),
+  /** Jev by TypeSafe AI: fast typed classification (topics, triage, reply grading). */
+  TYPESAFE_API_KEY: z.string().optional(),
+  JEV_MODEL: z.string().default("jev-1.13.0"),
   SUPPORT_EMAIL: z.string().default("support@tendril.app"),
 });
 
@@ -105,4 +108,5 @@ export const features = {
   threads: () => Boolean(env().THREADS_APP_ID && env().THREADS_APP_SECRET),
   linkedin: () => Boolean(env().LINKEDIN_CLIENT_ID && env().LINKEDIN_CLIENT_SECRET),
   ai: () => Boolean(env().ANTHROPIC_API_KEY),
+  jev: () => Boolean(env().TYPESAFE_API_KEY),
 };

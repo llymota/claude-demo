@@ -6,7 +6,7 @@ import { db, schema } from "../db";
 import { clip, pct } from "../format";
 import { log } from "../log";
 import { accountsFor, circles, ledger, openRooms, replyStats, secondLife, storefront } from "../queries";
-import { checkReply } from "../scoring";
+import { gradeReply } from "../jev";
 import type { Viewer } from "../session";
 import { anthropic, assertCredits, FALLBACK, model, recordUsage, UNTRUSTED_RULE, untrusted } from "./client";
 import { draftReply } from "./tasks";
@@ -153,10 +153,11 @@ function toolsFor(viewer: Viewer) {
     tool({
       name: "check_reply",
       label: "Grading the reply",
-      description: "Run Tendril's reply check on a piece of text. Use it on any reply you suggest before showing it.",
-      input: z.object({ text: z.string().min(1).max(3000) }),
-      async run({ text }) {
-        const c = checkReply(text);
+      description: "Run Tendril's reply check on a piece of text. Use it on any reply you suggest before showing it. Pass room_id when the reply is for a room, so it is graded against that post.",
+      input: z.object({ text: z.string().min(1).max(3000), room_id: z.string().optional() }),
+      async run({ text, room_id }) {
+        const r = room_id ? await ownedRoom(room_id) : null;
+        const c = await gradeReply(text, r?.text ?? null);
         return { grade: c.grade, score: c.score, findings: c.findings.map((f) => `${f.tone}: ${f.label}. ${f.detail}`) };
       },
     }),
@@ -181,7 +182,7 @@ function toolsFor(viewer: Viewer) {
       async run({ room_id, text }) {
         const r = await ownedRoom(room_id);
         if (!r) return "No room with that id.";
-        const c = checkReply(text);
+        const c = await gradeReply(text, r.text);
         await db
           .insert(schema.draft)
           .values({ userId, accountId: r.accountId, kind: "reply", roomId: r.id, text, score: c.score, rationale: "Written with the assistant", source: "assistant" })

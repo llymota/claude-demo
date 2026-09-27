@@ -6,7 +6,8 @@ import { z } from "zod";
 import { db, schema } from "../db";
 import type { Brief, VoiceProfile } from "../db/schema";
 import { log } from "../log";
-import { checkReply, type TopicDef } from "../scoring";
+import { gradeReply } from "../jev";
+import type { TopicDef } from "../scoring";
 import { anthropic, FALLBACK, model, recordUsage, UNTRUSTED_RULE, untrusted } from "./client";
 
 type Effort = "low" | "medium" | "high";
@@ -207,7 +208,7 @@ export async function draftReply(userId: string, roomId: string, ctx: { topics: 
 
   let out = await structured({ userId, credits: 1, schema: DraftSchema, system: DRAFT_RULES, prompt, effort: "medium" });
   if (!out) return null;
-  let check = checkReply(out.text);
+  let check = await gradeReply(out.text, room.text);
   if (check.score < 48) {
     const issues = check.findings.filter((f) => f.tone !== "good").map((f) => `${f.label}: ${f.detail}`);
     const revised = await structured({
@@ -219,7 +220,7 @@ export async function draftReply(userId: string, roomId: string, ctx: { topics: 
       prompt: `${prompt}\n\nYour first draft:\n${out.text}\n\nA reply checker graded it ${check.grade}. Fix these:\n${issues.join("\n") || "It needs something more specific."}`,
     });
     if (revised) {
-      const c2 = checkReply(revised.text);
+      const c2 = await gradeReply(revised.text, room.text);
       if (c2.score > check.score) [out, check] = [revised, c2];
     }
   }

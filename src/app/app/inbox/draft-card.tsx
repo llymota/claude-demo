@@ -17,6 +17,8 @@ export interface DraftView {
   canPost: boolean;
   isCheckin: boolean;
   maxLength: number;
+  /** Set when Jev is configured and the draft replies to a room. */
+  gradeRoomId: string | null;
 }
 
 export function DraftCard({ draft }: { draft: DraftView }) {
@@ -63,7 +65,7 @@ export function DraftCard({ draft }: { draft: DraftView }) {
               {text.length}/{draft.maxLength}
             </span>
           </div>
-          {!draft.isCheckin && <ReplyCheck text={text} />}
+          {!draft.isCheckin && <ReplyCheck text={text} deep={draft.gradeRoomId ? { roomId: draft.gradeRoomId } : undefined} />}
           {result && (result.ok ? <Notice tone="success">{result.message}{result.url && <> · <a className="underline" href={result.url} target="_blank" rel="noopener noreferrer">View</a></>}</Notice> : <Notice tone="error">{result.error}</Notice>)}
           {!done && (
             <div className="flex flex-wrap gap-2 border-t border-line pt-3">

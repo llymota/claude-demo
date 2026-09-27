@@ -8,10 +8,11 @@ export function compact(n: number | null | undefined) {
   return String(n);
 }
 
-export function duration(mins: number) {
+export function duration(minutes: number) {
+  const mins = Math.max(0, Math.round(minutes));
   if (mins >= 240) return "4h+";
   if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  return `${Math.max(0, Math.round(mins))}m`;
+  return `${mins}m`;
 }
 
 export function ago(days: number) {

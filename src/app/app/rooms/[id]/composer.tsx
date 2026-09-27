@@ -22,9 +22,10 @@ interface Props {
   initialText?: string;
   initialRationale?: string | null;
   aiEnabled: boolean;
+  jevEnabled: boolean;
 }
 
-export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength, initialText, initialRationale, aiEnabled }: Props) {
+export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength, initialText, initialRationale, aiEnabled, jevEnabled }: Props) {
   const [text, setText] = useState(initialText ?? "");
   const [rationale, setRationale] = useState<string | null>(initialRationale ?? null);
   const [drafting, startDraft] = useTransition();
@@ -107,7 +108,7 @@ export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength,
 
       {rationale && <p className="-mt-2 text-[12px] text-muted">Why this draft: {rationale}</p>}
 
-      <ReplyCheck text={text} />
+      <ReplyCheck text={text} deep={jevEnabled ? { roomId } : undefined} />
 
       {result && (result.ok ? <Notice tone="success">{result.message}{result.url && <> · <a className="underline" href={result.url} target="_blank" rel="noopener noreferrer">View</a></>}</Notice> : <Notice tone="error">{result.error}</Notice>)}
 

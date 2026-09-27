@@ -151,6 +151,8 @@ export interface ReplyCheck {
   score: number;
   grade: Grade;
   findings: ReplyFinding[];
+  /** Who graded it: Jev, or the built-in rules. */
+  by?: "jev" | "rules";
 }
 
 const GENERIC = [
@@ -177,39 +179,48 @@ export function gradeFor(score: number): Grade {
   return score >= 70 ? "Magnetic" : score >= 48 ? "Useful" : score >= 25 ? "Polite" : "Invisible";
 }
 
+/**
+ * The checks that are plain counting: emptiness, emoji-only, length and links.
+ * Jev handles judgment calls, but these stay in code because they're exact.
+ */
+export function replyMechanics(text: string): { words: number; delta: number; findings: ReplyFinding[]; invisible: ReplyCheck | null } {
+  const t = text.trim();
+  if (!t) return { words: 0, delta: 0, findings: [], invisible: { score: 0, grade: "Invisible", findings: [] } };
+  if (EMOJI_ONLY.test(t)) {
+    return { words: 0, delta: 0, findings: [], invisible: { score: 4, grade: "Invisible", findings: [{ tone: "bad", label: "Emoji only", detail: "Nobody visits a profile because of an emoji." }] } };
+  }
+  const findings: ReplyFinding[] = [];
+  let delta = 0;
+  const words = t.split(/\s+/).filter(Boolean).length;
+  if (words < 8) {
+    delta -= 18;
+    findings.push({ tone: "bad", label: "Too thin", detail: `${words} words. Give one reason, example or number.` });
+  } else if (words > 110) {
+    delta -= 10;
+    findings.push({ tone: "warn", label: "Long for a reply", detail: "Past about 110 words people skim. Keep the one point that matters." });
+  } else {
+    delta += 10;
+  }
+  if (/https?:\/\/|www\.|\.com\b|\.io\b/.test(t.toLowerCase())) {
+    delta -= 15;
+    findings.push({ tone: "bad", label: "Link in reply", detail: "Links in replies read as promotion and get down-ranked. Let your profile carry the link." });
+  }
+  return { words, delta, findings, invisible: null };
+}
+
+/** Rule-based reply grade. Runs in the browser while typing, and wherever Jev isn't configured. */
 export function checkReply(text: string): ReplyCheck {
   const t = text.trim();
   const lower = t.toLowerCase();
-  const findings: ReplyFinding[] = [];
-
-  if (!t) return { score: 0, grade: "Invisible", findings: [] };
-
-  if (EMOJI_ONLY.test(t)) {
-    return { score: 4, grade: "Invisible", findings: [{ tone: "bad", label: "Emoji only", detail: "Nobody visits a profile because of an emoji." }] };
-  }
-
-  let score = 30;
-  const words = t.split(/\s+/).filter(Boolean);
-
-  if (words.length < 8) {
-    score -= 18;
-    findings.push({ tone: "bad", label: "Too thin", detail: `${words.length} words. Give one reason, example or number.` });
-  } else if (words.length > 110) {
-    score -= 10;
-    findings.push({ tone: "warn", label: "Long for a reply", detail: "Past about 110 words people skim. Keep the one point that matters." });
-  } else {
-    score += 10;
-  }
+  const m = replyMechanics(t);
+  if (m.invisible) return m.invisible;
+  const findings: ReplyFinding[] = [...m.findings];
+  let score = 30 + m.delta;
 
   const generic = GENERIC.filter((g) => lower.includes(g));
   if (generic.length) {
     score -= 12 * generic.length;
-    findings.push({ tone: words.length < 15 ? "bad" : "warn", label: "Stock phrase", detail: `"${generic[0]}" is what every other reply says. Lead with your own point.` });
-  }
-
-  if (/https?:\/\/|www\.|\.com\b|\.io\b/.test(lower)) {
-    score -= 15;
-    findings.push({ tone: "bad", label: "Link in reply", detail: "Links in replies read as promotion and get down-ranked. Let your profile carry the link." });
+    findings.push({ tone: m.words < 15 ? "bad" : "warn", label: "Stock phrase", detail: `"${generic[0]}" is what every other reply says. Lead with your own point.` });
   }
 
   if (/\d/.test(t)) {

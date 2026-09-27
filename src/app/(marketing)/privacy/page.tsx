@@ -5,7 +5,7 @@ export const metadata = { title: "Privacy" };
 export default function Privacy() {
   const contact = process.env.SUPPORT_EMAIL ?? "privacy@tendril.app";
   return (
-    <Legal title="Privacy policy" updated="September 26, 2026">
+    <Legal title="Privacy policy" updated="September 27, 2026">
       <p>This policy explains what Tendril collects, why, and what you can do about it. It is a starting template; have it reviewed for your jurisdiction before launch.</p>
       <h2>What we collect</h2>
       <ul>
@@ -22,6 +22,7 @@ export default function Privacy() {
         <li>Polar for payments and invoicing.</li>
         <li>Resend for transactional email.</li>
         <li>Anthropic, to run the assistant and Autopilot. Posts and data needed for a request are sent to its API; under Anthropic&apos;s commercial terms that data is not used to train models.</li>
+          <li>TypeSafe AI, to classify posts and grade replies. The text of a post or reply is sent to its API for that single request.</li>
         <li>Our hosting and database providers.</li>
         <li>The social platforms you connect, under their own terms.</li>
       </ul>

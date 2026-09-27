@@ -65,6 +65,7 @@ export default async function InboxPage() {
         canPost,
         isCheckin: d.kind === "checkin",
         maxLength: acct.platform === "x" ? 280 : acct.platform === "bluesky" ? 300 : 500,
+        gradeRoomId: features.jev() && d.kind !== "checkin" && d.roomId ? d.roomId : null,
       };
     })
     .filter((x) => x !== null);

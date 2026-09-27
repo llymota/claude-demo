@@ -5,6 +5,7 @@ import { attributeFollower, followDelta, type AttributionContext } from "./attri
 import { PLANS } from "./billing/plans";
 import { db, schema } from "./db";
 import { log } from "./log";
+import { classifyPost, classifyRoom, mapLimit } from "./jev";
 import { providerFor } from "./providers";
 import { NotAvailable, RateLimited, ReauthRequired, type AccountRef, type CredentialUpdate, type Provider } from "./providers/types";
 import { classifyCircle, estimateOverlap, leverage, searchQueries, tagTopics, topicWeights, velocity, warmth, type InteractionLite } from "./scoring";
@@ -80,11 +81,17 @@ async function syncRooms(acct: Account, provider: Provider, ref: AccountRef, sav
   const personByExt = new Map(people.map((p) => [p.externalId, p]));
   const ints = await interactionsByPerson(people.map((p) => p.id));
 
+  // Keyword search finds candidates; Jev reads each new one once to confirm what it's actually about
+  // and whether it's worth anyone's time. Rooms we already know keep their topics and verdict.
+  const fresh = raw.filter((r) => !prevById.has(r.externalId) && tagTopics(r.text, topics).length > 0);
+  const judged = new Map((await mapLimit(fresh, 8, async (r) => [r.externalId, await classifyRoom(r, topics)] as const)).filter(([, c]) => c));
+
   let n = 0;
   for (const r of raw) {
-    const tagged = tagTopics(r.text, topics);
-    if (tagged.length === 0) continue; // matched a keyword inside a word or a hashtag we don't track
     const prev = prevById.get(r.externalId);
+    const jev = judged.get(r.externalId);
+    const tagged = prev ? prev.topics : jev?.topics.length ? jev.topics : tagTopics(r.text, topics);
+    if (tagged.length === 0) continue; // matched a keyword inside a word or a hashtag we don't track
     const v = velocity({ replies: r.replyCount, at: now, postedAt: r.postedAt }, prev ? { replies: prev.replyCount, at: prev.fetchedAt } : null);
     const overlap = r.audienceOverlap >= 0 ? r.audienceOverlap : estimateOverlap(myFollowers, r.authorFollowers);
     const person = personByExt.get(r.authorExternalId);
@@ -119,9 +126,12 @@ async function syncRooms(acct: Account, provider: Provider, ref: AccountRef, sav
       breakdown: { fit: lev.fit, early: lev.early, reach: lev.reach, rapport: lev.rapport, windowMinutes: lev.windowMinutes },
       fetchedAt: now,
     };
+    // Stored even when Jev rejects it, so the next sync doesn't ask again.
+    const skip = jev?.verdict === "skip";
+    const verdict = jev ? { aiVerdict: jev.verdict, aiReason: jev.reason } : {};
     await db
       .insert(schema.room)
-      .values({ ...values, status: lev.windowMinutes > 0 ? "open" : "expired" })
+      .values({ ...values, ...verdict, status: skip ? "dismissed" : lev.windowMinutes > 0 ? "open" : "expired" })
       .onConflictDoUpdate({
         target: [schema.room.accountId, schema.room.externalId],
         // Keep "replied" and "dismissed"; only open rooms can expire.
@@ -183,15 +193,29 @@ async function reclassify(acct: Account, myFollowers: number) {
 async function syncArchive(acct: Account, provider: Provider, ref: AccountRef, save: CredentialUpdate) {
   const ws = await db.query.workspace.findFirst({ where: eq(schema.workspace.userId, acct.userId) });
   const topics = ws?.topics ?? [];
-  const posts = await provider.getOwnPosts(ref, save, 200);
-  for (const p of posts.filter((x) => !x.isReply && x.text.trim())) {
+  const posts = (await provider.getOwnPosts(ref, save, 200)).filter((x) => !x.isReply && x.text.trim());
+  const known = posts.length
+    ? new Map(
+        (
+          await db.query.post.findMany({
+            where: and(eq(schema.post.accountId, acct.id), inArray(schema.post.externalId, posts.map((p) => p.externalId))),
+            columns: { externalId: true, topic: true },
+          })
+        ).map((p) => [p.externalId, p.topic]),
+      )
+    : new Map<string, string | null>();
+  const judged = new Map(
+    (await mapLimit(posts.filter((p) => !known.has(p.externalId)), 8, async (p) => [p.externalId, await classifyPost(p.text, topics)] as const)).filter(([, c]) => c),
+  );
+  for (const p of posts) {
+    const jev = judged.get(p.externalId);
     const values = {
       accountId: acct.id,
       externalId: p.externalId,
       replyRef: p.replyRef ?? null,
       url: p.url,
       text: p.text,
-      topic: tagTopics(p.text, topics)[0] ?? null,
+      topic: known.has(p.externalId) ? known.get(p.externalId)! : jev ? jev.topic : (tagTopics(p.text, topics)[0] ?? null),
       postedAt: p.postedAt,
       likes: p.likes,
       replies: p.replies,
@@ -199,7 +223,11 @@ async function syncArchive(acct: Account, provider: Provider, ref: AccountRef, s
       saves: p.saves,
       impressions: p.impressions,
     };
-    await db.insert(schema.post).values(values).onConflictDoUpdate({ target: [schema.post.accountId, schema.post.externalId], set: values });
+    // Jev only suggests retiring a post when it first arrives; after that "dated" is the user's call.
+    await db
+      .insert(schema.post)
+      .values({ ...values, dated: jev?.dated ?? false })
+      .onConflictDoUpdate({ target: [schema.post.accountId, schema.post.externalId], set: values });
   }
   return posts.length;
 }
