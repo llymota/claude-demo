@@ -9,6 +9,7 @@ const PROTECTED = /^\/(app(\/|$)|welcome$)/;
  * 127.0.0.1. Send everyone to the address in APP_URL.
  */
 function canonicalHost(req: NextRequest) {
+  // Dev only: `next start` rewrites a same-port redirect to a relative one, which would loop.
   if (process.env.NODE_ENV === "production") return null;
   const want = new URL(process.env.APP_URL || "http://127.0.0.1:3000");
   // The Host header is what the browser typed; nextUrl reflects the address the server bound to.

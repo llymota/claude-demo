@@ -113,10 +113,14 @@ export const features = {
   jev: () => Boolean(env().TYPESAFE_API_KEY),
 };
 
+export function isLoopback(url: string) {
+  return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname);
+}
+
 /**
  * Origins allowed to call the auth API. Sign-up fails with "Invalid origin" when the
  * page's address isn't here, so this covers APP_URL, Vercel's deployment and preview
- * domains, and any local port on localhost or 127.0.0.1 outside production.
+ * domains, and any local port on localhost or 127.0.0.1 when running locally.
  */
 export function trustedOrigins(): string[] {
   const e = env();
@@ -125,7 +129,8 @@ export function trustedOrigins(): string[] {
     const host = process.env[k];
     if (host) out.add(`https://${host}`);
   }
-  if (e.NODE_ENV !== "production") {
+  // Running on your own machine (npm run dev, or npm start after a build): any local port works.
+  if (e.NODE_ENV !== "production" || isLoopback(e.APP_URL)) {
     out.add("http://localhost:*");
     out.add("http://127.0.0.1:*");
   }
