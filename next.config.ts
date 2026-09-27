@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { localHosts } from "./src/lib/local-hosts";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -10,6 +11,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // `next dev` only serves its dev scripts to localhost. Opening the app at 127.0.0.1 or at the
+  // "Network:" address left a page whose buttons did nothing, so allow this machine's own addresses.
+  allowedDevOrigins: localHosts(),
   serverExternalPackages: ["postgres", "@electric-sql/pglite"],
   images: {
     remotePatterns: [

@@ -3,8 +3,12 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import nextEnv from "@next/env";
 
-const url = process.env.DATABASE_URL;
+// Read .env.local and friends the same way `next dev` does, so this migrates the database the app uses.
+nextEnv.loadEnvConfig(process.cwd());
+
+const url = process.env.DATABASE_URL || undefined;
 if (url) {
   const sql = postgres(url, { max: 1 });
   await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });

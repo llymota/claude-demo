@@ -13,16 +13,31 @@ export async function sendEmail(msg: Message) {
     log.info("email.skipped", { to: msg.to, subject: msg.subject, text: msg.text });
     return;
   }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env().RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env().EMAIL_FROM, to: msg.to, subject: msg.subject, text: msg.text }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env().RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: env().EMAIL_FROM, to: msg.to, subject: msg.subject, text: msg.text }),
+    });
+  } catch (err) {
+    notSent(msg, String((err as Error).message));
+    throw err;
+  }
   if (!res.ok) {
     const body = await res.text();
-    log.error("email.failed", { status: res.status, body: body.slice(0, 500) });
+    notSent(msg, `Resend returned ${res.status}: ${body.slice(0, 500)}`);
     throw new Error("Could not send email");
   }
+}
+
+/**
+ * A failed email usually means the sending domain isn't verified in Resend yet. Locally,
+ * print the message so you can still open the confirmation or reset link from the terminal.
+ */
+function notSent(msg: Message, reason: string) {
+  log.error("email.failed", { to: msg.to, subject: msg.subject, reason, hint: "Check that the domain in EMAIL_FROM is verified at resend.com/domains" });
+  if (process.env.NODE_ENV !== "production") log.warn("email.not_sent", { to: msg.to, subject: msg.subject, text: msg.text });
 }
 
 export const templates = {

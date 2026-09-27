@@ -19,7 +19,7 @@ export async function beginConnect(userId: string, platform: Platform) {
   const s: ConnectState = { state: randomToken(24), verifier: randomToken(48), userId, platform, exp: Date.now() + 10 * 60_000 };
   (await cookies()).set(COOKIE, encryptJson(s), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: env().APP_URL.startsWith("https://"),
     sameSite: "lax",
     path: "/api/connect",
     maxAge: 600,

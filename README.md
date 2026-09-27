@@ -42,7 +42,9 @@ npm run dev        # http://127.0.0.1:3000
 
 That's it. Without a `DATABASE_URL`, Tendril starts an embedded Postgres in `.data/pglite` and migrates it, and generates its three secrets into `.data/dev-secrets.json`. Delete `.data` to start over.
 
-Open `http://127.0.0.1:3000`. `localhost` redirects there in development, because Bluesky's OAuth loopback client requires 127.0.0.1 and a session made on one address isn't visible on the other. Bluesky works locally with no setup. To turn on the assistant and Autopilot, put `ANTHROPIC_API_KEY=...` in `.env.local` and restart. Without an email key, emails are printed to the terminal and verification is skipped. Every other integration switches on when its variables are set (see `.env.example`), and the UI shows "Not configured" until then.
+Open `http://127.0.0.1:3000`. `localhost` moves you there in development, because Bluesky's OAuth loopback client requires 127.0.0.1 and a session made on one address isn't visible on the other. The network address `next dev` prints works too (for a phone on the same Wi-Fi), with a notice that account connections and email links return to `APP_URL`. Bluesky works locally with no setup.
+
+With `DATABASE_URL` set (Supabase, Neon or any Postgres), migrations run when the server starts, so a new database works straight away. `npm run db:migrate` does the same by hand and reads `.env.local`. To turn on the assistant and Autopilot, put `ANTHROPIC_API_KEY=...` in `.env.local` and restart. Without an email key, emails are printed to the terminal and verification is skipped. With one, new accounts must confirm their email; the domain in `EMAIL_FROM` has to be verified at resend.com/domains, and if a send fails in development the link is printed in the terminal instead. Every other integration switches on when its variables are set (see `.env.example`), and the UI shows "Not configured" until then.
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. `npm run db:studio` opens the database.
 

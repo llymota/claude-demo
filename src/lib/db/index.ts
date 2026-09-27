@@ -44,12 +44,22 @@ export const db: DB = new Proxy({} as DB, {
   },
 });
 
-/** Applies migrations to the embedded database. A no-op when DATABASE_URL is set (run `npm run db:migrate`). */
-export function ensureLocalDatabase() {
-  if (env().DATABASE_URL) return Promise.resolve();
+/**
+ * Brings the database schema up to date when the server starts, so a fresh database
+ * (the embedded one, or a new Supabase or Neon project) works without a separate step.
+ * On Vercel, the build runs migrations instead (see "vercel-build"), since many
+ * serverless instances starting at once shouldn't all migrate.
+ */
+export function ensureDatabase() {
+  if (process.env.VERCEL) return Promise.resolve();
   globalForDb.__tendrilReady ??= (async () => {
-    const { migrate } = require("drizzle-orm/pglite/migrator") as typeof import("drizzle-orm/pglite/migrator");
-    await migrate(instance() as never, { migrationsFolder: "./drizzle" });
+    if (env().DATABASE_URL) {
+      const { migrate } = require("drizzle-orm/postgres-js/migrator") as typeof import("drizzle-orm/postgres-js/migrator");
+      await migrate(instance(), { migrationsFolder: "./drizzle" });
+    } else {
+      const { migrate } = require("drizzle-orm/pglite/migrator") as typeof import("drizzle-orm/pglite/migrator");
+      await migrate(instance() as never, { migrationsFolder: "./drizzle" });
+    }
   })();
   return globalForDb.__tendrilReady;
 }

@@ -42,17 +42,28 @@ export function SignInForm() {
   const [pending, start] = useTransition();
   return (
     <form
+      // POST so the password never lands in the address bar if the page script hasn't loaded.
+      method="post"
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         const f = new FormData(e.currentTarget);
+        const next = safeNext(params.get("next"));
         start(async () => {
-          const { error } = await authClient.signIn.email({ email: String(f.get("email")), password: String(f.get("password")), rememberMe: true });
+          const { error } = await authClient.signIn.email({ email: String(f.get("email")), password: String(f.get("password")), rememberMe: true, callbackURL: next });
           if (error) {
-            setError(error.status === 403 ? "Confirm your email first. We sent you a link." : error.status === 429 ? "Too many attempts. Wait a minute and try again." : "Email or password is incorrect.");
+            setError(
+              error.status === 403
+                ? "Confirm your email first. We just sent a new confirmation link to your inbox."
+                : error.status === 429
+                  ? "Too many attempts. Wait a minute and try again."
+                  : error.status === 401 || error.status === 400
+                    ? "Email or password is incorrect."
+                    : "Something went wrong on our side. Try again in a moment.",
+            );
             return;
           }
-          router.push(safeNext(params.get("next")));
+          router.push(next);
           router.refresh();
         });
       }}
@@ -83,15 +94,11 @@ export function SignUpForm({ verify }: { verify: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  if (sent) {
-    return (
-      <Notice tone="success">
-        We sent a confirmation link to <span className="font-medium">{sent}</span>. Open it to finish setting up Tendril.
-      </Notice>
-    );
-  }
+  if (sent) return <CheckInbox email={sent} />;
   return (
     <form
+      // POST so the password never lands in the address bar if the page script hasn't loaded.
+      method="post"
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
@@ -100,7 +107,15 @@ export function SignUpForm({ verify }: { verify: boolean }) {
         start(async () => {
           const { error } = await authClient.signUp.email({ name: String(f.get("name")), email, password: String(f.get("password")), callbackURL: "/welcome" });
           if (error) {
-            setError(error.status === 422 || /exist/i.test(error.message ?? "") ? "An account with this email already exists. Sign in instead." : (error.message ?? "Couldn't create your account."));
+            setError(
+              error.status === 422 || /exist/i.test(error.message ?? "")
+                ? "An account with this email already exists. Sign in instead."
+                : error.status === 429
+                  ? "Too many attempts. Wait a minute and try again."
+                  : error.status && error.status >= 500
+                    ? "Something went wrong on our side and your account wasn't created. Try again in a moment."
+                    : (error.message ?? "Couldn't create your account."),
+            );
             return;
           }
           if (verify) setSent(email);
@@ -135,12 +150,45 @@ export function SignUpForm({ verify }: { verify: boolean }) {
   );
 }
 
+function CheckInbox({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  return (
+    <div className="flex flex-col gap-3">
+      <Notice tone="success">
+        We sent a confirmation link to <span className="font-medium">{email}</span>. Open it to finish setting up Tendril.
+      </Notice>
+      <p className="text-[13px] text-muted">
+        Nothing after a few minutes? Check spam, or{" "}
+        <button
+          type="button"
+          className="text-ink underline underline-offset-4 disabled:opacity-50"
+          disabled={state === "sending" || state === "sent"}
+          onClick={async () => {
+            setState("sending");
+            const res = await authClient.sendVerificationEmail({ email, callbackURL: "/welcome" }).catch(() => null);
+            setState(res && !res.error ? "sent" : "failed");
+          }}
+        >
+          {state === "sent" ? "sent again" : state === "sending" ? "sending…" : "send it again"}
+        </button>
+        .
+      </p>
+      {state === "failed" && <Notice tone="error">We couldn&apos;t send the email just now. Wait a minute and try again.</Notice>}
+      {process.env.NODE_ENV !== "production" && (
+        <p className="text-[12px] text-muted">Running locally: if the email can&apos;t be sent, the link is printed in the terminal running npm run dev.</p>
+      )}
+    </div>
+  );
+}
+
 export function ForgotForm() {
   const [done, setDone] = useState(false);
   const [pending, start] = useTransition();
   if (done) return <Notice tone="success">If an account exists for that email, a reset link is on its way. It expires in an hour.</Notice>;
   return (
     <form
+      // POST so the password never lands in the address bar if the page script hasn't loaded.
+      method="post"
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
@@ -171,6 +219,8 @@ export function ResetForm() {
   if (!token) return <Notice tone="error">{error ?? "This link is missing its token. Request a new one."}</Notice>;
   return (
     <form
+      // POST so the password never lands in the address bar if the page script hasn't loaded.
+      method="post"
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();

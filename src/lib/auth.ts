@@ -78,6 +78,8 @@ function build() {
     },
     emailVerification: {
       sendOnSignUp: features.email(),
+      // Signing in before confirming sends a fresh link, so a lost or failed email isn't a dead end.
+      sendOnSignIn: true,
       autoSignInAfterVerification: true,
       expiresIn: 60 * 60 * 24,
       sendVerificationEmail: async ({ user, url }) => {

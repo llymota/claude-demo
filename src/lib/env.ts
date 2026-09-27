@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { z } from "zod";
+import { localHosts } from "./local-hosts";
 
 /**
  * Server environment, validated once at startup. Optional groups turn features on:
@@ -120,7 +121,7 @@ export function isLoopback(url: string) {
 /**
  * Origins allowed to call the auth API. Sign-up fails with "Invalid origin" when the
  * page's address isn't here, so this covers APP_URL, Vercel's deployment and preview
- * domains, and any local port on localhost or 127.0.0.1 when running locally.
+ * domains, and, when running locally, any port on this machine's own addresses.
  */
 export function trustedOrigins(): string[] {
   const e = env();
@@ -129,10 +130,9 @@ export function trustedOrigins(): string[] {
     const host = process.env[k];
     if (host) out.add(`https://${host}`);
   }
-  // Running on your own machine (npm run dev, or npm start after a build): any local port works.
+  // Running on your own machine (npm run dev, or npm start after a build).
   if (e.NODE_ENV !== "production" || isLoopback(e.APP_URL)) {
-    out.add("http://localhost:*");
-    out.add("http://127.0.0.1:*");
+    for (const host of localHosts()) out.add(`http://${host}:*`);
   }
   return [...out];
 }
