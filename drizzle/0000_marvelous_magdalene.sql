@@ -1,5 +1,7 @@
 CREATE TYPE "public"."account_status" AS ENUM('active', 'reauth', 'error');--> statement-breakpoint
-CREATE TYPE "public"."circle" AS ENUM('anchor', 'peer', 'rising', 'fan');--> statement-breakpoint
+CREATE TYPE "public"."circle_kind" AS ENUM('anchor', 'peer', 'rising', 'fan');--> statement-breakpoint
+CREATE TYPE "public"."draft_kind" AS ENUM('reply', 'checkin', 'reshare');--> statement-breakpoint
+CREATE TYPE "public"."draft_status" AS ENUM('pending', 'posted', 'discarded');--> statement-breakpoint
 CREATE TYPE "public"."interaction_kind" AS ENUM('reply-to-me', 'my-reply', 'mention', 'dm', 'repost', 'collab', 'like');--> statement-breakpoint
 CREATE TYPE "public"."plan" AS ENUM('free', 'grower', 'studio');--> statement-breakpoint
 CREATE TYPE "public"."platform" AS ENUM('bluesky', 'x', 'threads', 'linkedin');--> statement-breakpoint
@@ -21,12 +23,55 @@ CREATE TABLE "account" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "ai_message" (
+	"id" text PRIMARY KEY NOT NULL,
+	"thread_id" text NOT NULL,
+	"role" text NOT NULL,
+	"content" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "ai_thread" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"title" text DEFAULT 'New conversation' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "ai_usage" (
+	"user_id" text NOT NULL,
+	"month" text NOT NULL,
+	"credits" integer DEFAULT 0 NOT NULL,
+	"input_tokens" bigint DEFAULT 0 NOT NULL,
+	"output_tokens" bigint DEFAULT 0 NOT NULL,
+	CONSTRAINT "ai_usage_user_id_month_pk" PRIMARY KEY("user_id","month")
+);
+--> statement-breakpoint
 CREATE TABLE "audit_event" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text,
 	"action" text NOT NULL,
 	"detail" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "draft" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"account_id" text NOT NULL,
+	"kind" "draft_kind" NOT NULL,
+	"room_id" text,
+	"person_id" text,
+	"post_id" text,
+	"text" text NOT NULL,
+	"rationale" text,
+	"score" integer DEFAULT 0 NOT NULL,
+	"status" "draft_status" DEFAULT 'pending' NOT NULL,
+	"source" text DEFAULT 'autopilot' NOT NULL,
+	"result_url" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"decided_at" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "follow_attribution" (
@@ -80,10 +125,12 @@ CREATE TABLE "person" (
 	"followers" integer DEFAULT 0 NOT NULL,
 	"baseline_followers" integer DEFAULT 0 NOT NULL,
 	"baseline_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"circle" "circle" NOT NULL,
+	"circle" "circle_kind" NOT NULL,
 	"pinned_circle" boolean DEFAULT false NOT NULL,
 	"note" text,
 	"last_greeted_at" timestamp with time zone,
+	"ai_brief" text,
+	"ai_brief_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -149,6 +196,9 @@ CREATE TABLE "room" (
 	"breakdown" jsonb,
 	"manual" boolean DEFAULT false NOT NULL,
 	"status" "room_status" DEFAULT 'open' NOT NULL,
+	"ai_verdict" text,
+	"ai_reason" text,
+	"ai_angle" text,
 	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -242,12 +292,25 @@ CREATE TABLE "workspace" (
 	"topics" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"timezone" text DEFAULT 'UTC' NOT NULL,
 	"onboarded_at" timestamp with time zone,
+	"voice" jsonb,
+	"autopilot" jsonb DEFAULT '{"enabled":true,"draftsPerDay":3,"digest":true,"autoReshare":false}'::jsonb NOT NULL,
+	"autopilot_ran_at" timestamp with time zone,
+	"morning_brief" jsonb,
+	"weekly_review" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_message" ADD CONSTRAINT "ai_message_thread_id_ai_thread_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."ai_thread"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_thread" ADD CONSTRAINT "ai_thread_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_usage" ADD CONSTRAINT "ai_usage_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_event" ADD CONSTRAINT "audit_event_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "draft" ADD CONSTRAINT "draft_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "draft" ADD CONSTRAINT "draft_account_id_social_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."social_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "draft" ADD CONSTRAINT "draft_room_id_room_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."room"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "draft" ADD CONSTRAINT "draft_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "draft" ADD CONSTRAINT "draft_post_id_post_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."post"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "follow_attribution" ADD CONSTRAINT "follow_attribution_account_id_social_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."social_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "follower" ADD CONSTRAINT "follower_account_id_social_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."social_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "follower_snapshot" ADD CONSTRAINT "follower_snapshot_account_id_social_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."social_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -265,7 +328,11 @@ ALTER TABLE "subscription" ADD CONSTRAINT "subscription_user_id_user_id_fk" FORE
 ALTER TABLE "sync_run" ADD CONSTRAINT "sync_run_account_id_social_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."social_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "workspace" ADD CONSTRAINT "workspace_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "ai_message_thread_idx" ON "ai_message" USING btree ("thread_id","created_at");--> statement-breakpoint
+CREATE INDEX "ai_thread_user_idx" ON "ai_thread" USING btree ("user_id","updated_at");--> statement-breakpoint
 CREATE INDEX "audit_user_idx" ON "audit_event" USING btree ("user_id","created_at");--> statement-breakpoint
+CREATE INDEX "draft_user_idx" ON "draft" USING btree ("user_id","status","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "draft_room_unique" ON "draft" USING btree ("room_id","kind");--> statement-breakpoint
 CREATE INDEX "follower_seen_idx" ON "follower" USING btree ("account_id","first_seen_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "interaction_unique" ON "interaction" USING btree ("person_id","kind","external_ref");--> statement-breakpoint
 CREATE INDEX "interaction_time_idx" ON "interaction" USING btree ("person_id","occurred_at");--> statement-breakpoint

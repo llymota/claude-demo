@@ -3,6 +3,7 @@ import { Empty, PageHeader, Section, Tag } from "@/components/ui";
 import { ago, compact } from "@/lib/format";
 import { accountsFor, circles } from "@/lib/queries";
 import { requireUser } from "@/lib/session";
+import { AskButton } from "../_components/assistant";
 import { PersonActions } from "./person-actions";
 
 export const metadata = { title: "Circles" };
@@ -54,7 +55,10 @@ export default async function CirclesPage(props: PageProps<"/app/circles">) {
                       <Tag>{CIRCLES.find((c) => c.id === n.person.circle)?.label}</Tag>
                     </div>
                     <p className="text-[13px] text-ink-2">{n.reason}.</p>
-                    <p className="text-[13px] text-muted">{MOVES[n.person.circle]}</p>
+                    {n.person.aiBrief ? <p className="text-[13px] text-muted">{n.person.aiBrief}</p> : <p className="text-[13px] text-muted">{MOVES[n.person.circle]}</p>}
+                    <AskButton question={`Help me reconnect with ${n.person.name}. What should I say?`} className="self-start text-[12px] underline underline-offset-2">
+                      Ask what to say
+                    </AskButton>
                     <PersonActions personId={n.personId} circle={n.person.circle} note={n.person.note ?? ""} pinned={n.person.pinnedCircle} compact />
                   </div>
                 ))}
@@ -93,6 +97,7 @@ export default async function CirclesPage(props: PageProps<"/app/circles">) {
                         <p className="font-medium">{p.name}</p>
                         <p className="text-muted">@{p.handle}</p>
                         {p.note && <p className="mt-1 max-w-xs text-ink-2">{p.note}</p>}
+                        {p.aiBrief && <p className="mt-1 max-w-xs text-[12px] text-muted">{p.aiBrief}</p>}
                       </td>
                       <td className="px-4 py-3">
                         {CIRCLES.find((c) => c.id === p.circle)?.label}

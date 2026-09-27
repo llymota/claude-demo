@@ -16,11 +16,12 @@ export default function Privacy() {
         <li>Billing status from Polar. We never receive card details.</li>
       </ul>
       <h2>How we use it</h2>
-      <p>Only to run the product for you: finding rooms, scoring replies, remembering relationships and attributing follows. We don&apos;t sell data, show ads, or train models on your content.</p>
+      <p>Only to run the product for you: finding rooms, scoring replies, remembering relationships and attributing follows. We don&apos;t sell data, show ads, or train models on your content. The assistant keeps your conversations with it so you can return to them; deleting your account deletes them.</p>
       <h2>Processors</h2>
       <ul>
         <li>Polar for payments and invoicing.</li>
         <li>Resend for transactional email.</li>
+        <li>Anthropic, to run the assistant and Autopilot. Posts and data needed for a request are sent to its API; under Anthropic&apos;s commercial terms that data is not used to train models.</li>
         <li>Our hosting and database providers.</li>
         <li>The social platforms you connect, under their own terms.</li>
       </ul>

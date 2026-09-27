@@ -8,7 +8,7 @@ const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variabl
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
   title: { default: "Tendril: grow without posting more", template: "%s · Tendril" },
-  description: "Tendril finds the conversations worth joining, remembers the people who show up for you, and resurfaces the posts your new followers missed.",
+  description: "Tendril finds the conversations worth joining, drafts replies in your voice for you to approve, remembers the people who show up for you, and resurfaces the posts your new followers missed.",
   openGraph: { title: "Tendril", description: "Grow on social media without posting more.", type: "website" },
 };
 

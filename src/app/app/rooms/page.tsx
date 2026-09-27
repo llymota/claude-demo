@@ -65,7 +65,14 @@ export default async function RoomsPage(props: PageProps<"/app/rooms">) {
                           <span>· {r.manual ? "added by you" : `${duration(r.ageMinutes)} ago`}</span>
                         </span>
                         <span className="mt-1 line-clamp-3 block text-[14px] text-ink-2">{r.text}</span>
+                        {r.aiAngle && (
+                          <span className="mt-1.5 block text-[13px]">
+                            <span className="font-medium">Your angle:</span> <span className="text-ink-2">{r.aiAngle}</span>
+                          </span>
+                        )}
                         <span className="mt-2 flex flex-wrap gap-1.5">
+                          {r.aiVerdict === "strong" && <Tag strong>Autopilot: worth it</Tag>}
+                          {r.aiVerdict === "maybe" && <Tag>Autopilot: maybe</Tag>}
                           {!r.manual && <Tag strong={r.windowLeft < 30}>{r.windowLeft < 30 ? `Closing in ${duration(r.windowLeft)}` : `Open ${duration(r.windowLeft)}`}</Tag>}
                           {!r.manual && <Tag>{r.replyCount} replies</Tag>}
                           {b && <Tag>{pct(b.reach)} new to you</Tag>}

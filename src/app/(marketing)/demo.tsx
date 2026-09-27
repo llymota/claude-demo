@@ -31,7 +31,7 @@ export function ReplyDemo() {
       <div className="p-5">
         <p className="label mb-3">Reply check</p>
         <ReplyCheck text={text} />
-        <p className="mt-5 border-t border-line pt-3 text-[12px] text-muted">Runs in your browser. Tendril never writes replies for you; it tells you whether yours will be noticed.</p>
+        <p className="mt-5 border-t border-line pt-3 text-[12px] text-muted">Runs in your browser. Autopilot grades every draft it writes with this same check before you see it.</p>
       </div>
     </div>
   );

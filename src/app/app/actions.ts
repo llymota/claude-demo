@@ -15,7 +15,12 @@ import { blueskyClient } from "@/lib/providers/bluesky-oauth";
 import { NotAvailable, ReauthRequired } from "@/lib/providers/types";
 import { localDay } from "@/lib/queries";
 import { checkReply, leverage, tagTopics, topicWeights } from "@/lib/scoring";
-import { requireUser } from "@/lib/session";
+import { requireUser, type Viewer } from "@/lib/session";
+import { runAutopilot } from "@/lib/autopilot";
+import { draftReply, learnVoice } from "@/lib/ai/tasks";
+import { assertCredits, OutOfCredits } from "@/lib/ai/client";
+import { features } from "@/lib/env";
+import { DEFAULT_AUTOPILOT } from "@/lib/db/schema";
 import { syncAccount } from "@/lib/sync";
 
 export type ActionResult = { ok: true; message?: string; url?: string } | { ok: false; error: string };
@@ -160,7 +165,10 @@ const replySchema = z.object({ roomId: z.string().min(1), text: z.string().trim(
  * Tendril never writes or schedules replies.
  */
 export async function sendReply(input: z.infer<typeof replySchema>): Promise<ActionResult> {
-  const viewer = await requireUser();
+  return replyAs(await requireUser(), input);
+}
+
+async function replyAs(viewer: Viewer, input: z.infer<typeof replySchema>): Promise<ActionResult> {
   const parsed = replySchema.safeParse(input);
   if (!parsed.success) return fail("Write a reply first");
   const r = await ownedRoom(viewer.user.id, parsed.data.roomId);
@@ -301,7 +309,10 @@ export async function setDated(postId: string, dated: boolean): Promise<ActionRe
 }
 
 export async function resurface(input: { postId: string; text: string; mode: "post" | "log" }): Promise<ActionResult> {
-  const viewer = await requireUser();
+  return resurfaceAs(await requireUser(), input);
+}
+
+async function resurfaceAs(viewer: Viewer, input: { postId: string; text: string; mode: "post" | "log" }): Promise<ActionResult> {
   if (!viewer.limits.secondLife) return fail("Second Life is part of Grower");
   const text = z.string().trim().min(1).max(3000).safeParse(input.text);
   if (!text.success) return fail("Write a new first line first");
@@ -326,6 +337,104 @@ export async function resurface(input: { postId: string; text: string; mode: "po
     .onConflictDoNothing();
   refresh();
   return { ok: true, message: posted ? "Posted" : "Logged as resurfaced", url: posted?.url };
+}
+
+/* ------------------------------ inbox ------------------------------- */
+
+async function ownedDraft(userId: string, draftId: string) {
+  return db.query.draft.findFirst({ where: and(eq(schema.draft.id, draftId), eq(schema.draft.userId, userId), eq(schema.draft.status, "pending")) });
+}
+
+const approveSchema = z.object({ draftId: z.string().min(1), text: z.string().trim().min(1).max(3000), mode: z.enum(["post", "log"]) });
+
+/** The only path from a draft to a post: the user's own click, with their final text. */
+export async function approveDraft(input: z.infer<typeof approveSchema>): Promise<ActionResult> {
+  const viewer = await requireUser();
+  const parsed = approveSchema.safeParse(input);
+  if (!parsed.success) return fail("The draft is empty");
+  const d = await ownedDraft(viewer.user.id, parsed.data.draftId);
+  if (!d) return fail("That draft is gone");
+  let result: ActionResult;
+  if (d.kind === "reply" && d.roomId) result = await replyAs(viewer, { roomId: d.roomId, text: parsed.data.text, mode: parsed.data.mode });
+  else if (d.kind === "reshare" && d.postId) result = await resurfaceAs(viewer, { postId: d.postId, text: parsed.data.text, mode: parsed.data.mode });
+  else if (d.kind === "checkin" && d.personId) result = await markGreeted(d.personId);
+  else return fail("That draft can't be sent");
+  if (!result.ok) return result;
+  await db.update(schema.draft).set({ status: "posted", text: parsed.data.text, decidedAt: new Date(), resultUrl: result.url ?? null }).where(eq(schema.draft.id, d.id));
+  await audit(viewer.user.id, "draft.approved", { draftId: d.id, kind: d.kind, mode: parsed.data.mode, edited: parsed.data.text !== d.text });
+  refresh();
+  return result;
+}
+
+export async function discardDraft(draftId: string): Promise<ActionResult> {
+  const viewer = await requireUser();
+  const d = await ownedDraft(viewer.user.id, draftId);
+  if (!d) return fail("That draft is gone");
+  await db.update(schema.draft).set({ status: "discarded", decidedAt: new Date() }).where(eq(schema.draft.id, d.id));
+  refresh();
+  return { ok: true, message: "Discarded" };
+}
+
+/** Drafts a reply for a room in the user's voice; the text comes back into the composer. */
+export async function draftForRoom(roomId: string): Promise<ActionResult & { text?: string; rationale?: string }> {
+  const viewer = await requireUser();
+  if (!features.ai()) return fail("AI isn't configured on this server");
+  const r = await ownedRoom(viewer.user.id, roomId);
+  if (!r) return fail("Room not found");
+  try {
+    await assertCredits(viewer.user.id, viewer.plan);
+    const d = await draftReply(viewer.user.id, r.room.id, { topics: viewer.workspace.topics, voice: viewer.workspace.voice ?? null, source: "composer" });
+    if (!d) return fail("Couldn't draft this one. Try writing it yourself.");
+    refresh();
+    return { ok: true, text: d.text, rationale: d.rationale ?? undefined };
+  } catch (err) {
+    if (err instanceof OutOfCredits) return fail(err.message);
+    log.error("draft.failed", { roomId, error: err });
+    return fail("Couldn't draft right now");
+  }
+}
+
+/* ---------------------------- autopilot ----------------------------- */
+
+const autopilotSchema = z.object({ enabled: z.boolean(), draftsPerDay: z.number().int().min(0).max(10), digest: z.boolean(), autoReshare: z.boolean() });
+
+export async function saveAutopilot(input: z.infer<typeof autopilotSchema>): Promise<ActionResult> {
+  const viewer = await requireUser();
+  const parsed = autopilotSchema.safeParse(input);
+  if (!parsed.success) return fail("Check the settings");
+  await db.update(schema.workspace).set({ autopilot: { ...DEFAULT_AUTOPILOT, ...parsed.data } }).where(eq(schema.workspace.userId, viewer.user.id));
+  await audit(viewer.user.id, "autopilot.settings", parsed.data);
+  refresh();
+  return { ok: true, message: "Saved" };
+}
+
+export async function runAutopilotNow(): Promise<ActionResult> {
+  const viewer = await requireUser();
+  if (!features.ai()) return fail("AI isn't configured on this server");
+  if (!viewer.limits.autopilot) return fail("Autopilot is part of Grower");
+  const last = viewer.workspace.autopilotRanAt;
+  if (last && Date.now() - last.getTime() < 30 * 60_000) return fail("Autopilot ran less than 30 minutes ago");
+  const r = await runAutopilot(viewer.user.id, { force: true });
+  refresh();
+  if (r.skipped === "out_of_credits") return fail("You're out of AI credits for this month");
+  if (r.skipped === "no_accounts") return fail("Connect an account first");
+  if (r.skipped) return fail("Autopilot couldn't finish. Try again later.");
+  return { ok: true, message: `Prepared ${r.drafts} replies, ${r.checkins} check-ins and ${r.reshares} reshares` };
+}
+
+export async function relearnVoice(): Promise<ActionResult> {
+  const viewer = await requireUser();
+  if (!features.ai()) return fail("AI isn't configured on this server");
+  try {
+    await assertCredits(viewer.user.id, viewer.plan);
+    const v = await learnVoice(viewer.user.id);
+    refresh();
+    return v ? { ok: true, message: `Learned from ${v.learnedFrom} of your posts` } : fail("Tendril needs at least five of your posts first. Sync an account.");
+  } catch (err) {
+    if (err instanceof OutOfCredits) return fail(err.message);
+    log.warn("voice.learn_failed", { error: err });
+    return fail("Couldn't learn your voice right now");
+  }
 }
 
 /* ----------------------------- accounts ----------------------------- */

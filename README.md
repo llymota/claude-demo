@@ -6,23 +6,27 @@ An account with 2,000 followers posting into its own feed reaches the same 2,000
 
 ## The product
 
-A fifteen-minute **daily round** instead of "post more".
+Tendril does the legwork of organic growth overnight and leaves you a ten-minute review in the morning.
 
-| Tool | What it does |
+| Feature | What it does |
 | --- | --- |
-| **Rooms** | Live conversations on your topics, ranked by leverage: topic fit, earliness, how much of the room has never seen you, and rapport with the author. Each room shows when its window closes. |
-| **Reply check** | Grades your reply *Invisible, Polite, Useful, Magnetic* as you type. It checks your words; it never writes them. |
-| **Circles** | Relationship memory built from real interactions: warmth (21-day half-life), reciprocity, and nudges when a connection is cooling. |
-| **Second Life** | Past posts most of your current followers missed, from follower-growth history, with a one-click reshare. |
+| **Autopilot** | Once a day it reads new conversations and hides bait and noise, drafts replies in your voice for the best ones, prepares check-ins with people going cold, picks an old post to reshare and writes a morning brief (emailed if you want). Monday brings a weekly review of what earned followers. |
+| **Inbox** | Everything Autopilot or the assistant prepared, next to its context. Edit, then post, copy or discard. Replies never post without your click. |
+| **Assistant** | ⌘K from anywhere. Answers from your real rooms, circles, archive and Ledger through read-only tools, and can draft to your Inbox, add notes or hide rooms. It cannot post. |
+| **Rooms** | Live conversations on your topics, ranked by leverage (topic fit, earliness, how much of the room has never seen you, rapport). Autopilot adds a verdict and the angle only you can bring. |
+| **Reply check** | Grades a reply *Invisible, Polite, Useful, Magnetic* as you type. Autopilot grades its own drafts with it and rewrites weak ones before you see them. |
+| **Circles** | Relationship memory from real interactions: warmth, reciprocity, and nudges when a connection cools, with an AI brief per person. |
+| **Second Life** | Past posts most of your current followers missed, with a fresh opening line to reshare them. |
 | **Storefront** | Bio and pinned post audit against the topics you want to be known for. |
 | **Ledger** | Where new followers came from: replies, relationships, resurfaced posts, profile, or unattributed. |
 
-Tendril never posts unless you press Post, never writes replies, and never follows, likes or schedules on your behalf.
+Your voice profile is learned from your own posts and refreshed every two weeks (Settings > Autopilot). The only thing Autopilot may post without asking is a reshare of your own post, once a day, and only if you switch it on.
 
 ## Stack
 
 - Next.js 16 (App Router, server actions, `proxy.ts`), React 19, Tailwind CSS 4
-- PostgreSQL with Drizzle ORM and checked-in migrations (`drizzle/`)
+- PostgreSQL with Drizzle ORM and checked-in migrations (`drizzle/`); PGlite (embedded Postgres) for local development
+- Claude via the Anthropic SDK: structured outputs for triage, drafts, voice and briefs; a streaming tool-use loop for the assistant; server-side fallbacks on every request; per-plan monthly AI credits
 - Better Auth: email and password with verification and reset, optional Google and GitHub, DB-backed rate limits
 - Polar for billing: checkout, customer portal and webhooks via `@polar-sh/better-auth`
 - Platform APIs: Bluesky (atproto OAuth), X API v2 (OAuth 2.0 PKCE), Threads Graph API, LinkedIn (OpenID Connect)
@@ -31,16 +35,30 @@ Tendril never posts unless you press Post, never writes replies, and never follo
 ## Run locally
 
 ```bash
-cp .env.example .env.local        # fill in the three secrets (commands are in the file)
-docker compose up -d db           # or any Postgres 16
 npm install
-npm run db:migrate
-npm run dev                       # http://127.0.0.1:3000
+npm run dev        # http://127.0.0.1:3000
 ```
 
-Use `127.0.0.1`, not `localhost`: Bluesky's OAuth loopback client requires it. Without `RESEND_API_KEY`, emails are printed to the log and verification is skipped. Every optional integration switches on when its variables are set, and the UI shows "Not configured" until then.
+That's it. Without a `DATABASE_URL`, Tendril starts an embedded Postgres in `.data/pglite` and migrates it, and generates its three secrets into `.data/dev-secrets.json`. Delete `.data` to start over.
 
-Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
+Use `127.0.0.1`, not `localhost`: Bluesky's OAuth loopback client requires it, and Bluesky works locally with no setup. To turn on the assistant and Autopilot, put `ANTHROPIC_API_KEY=...` in `.env.local` and restart. Without an email key, emails are printed to the terminal and verification is skipped. Every other integration switches on when its variables are set (see `.env.example`), and the UI shows "Not configured" until then.
+
+Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. `npm run db:studio` opens the database.
+
+## Deploy to Vercel
+
+1. Import the repository in Vercel.
+2. Add a Postgres database (Neon from the Vercel Marketplace sets `DATABASE_URL` for you).
+3. Set `APP_URL` to your domain, plus `BETTER_AUTH_SECRET` (`openssl rand -base64 48`), `TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 32`), `CRON_SECRET` (`openssl rand -hex 24`), `ANTHROPIC_API_KEY`, and the integrations below.
+4. Deploy. The `vercel-build` script applies migrations before every build.
+
+`vercel.json` runs `/api/cron/sync` once a day, which works on the Hobby plan: it syncs accounts, triages new rooms and runs each paid user's Autopilot. Accounts also sync whenever their owner opens the app. On Vercel Pro, change the schedule to `*/15 * * * *` for background sync every 15 minutes. Vercel sends `CRON_SECRET` as a bearer token; any other scheduler can do the same:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/sync
+```
+
+`/api/health` checks the database.
 
 ## Configure integrations
 
@@ -62,21 +80,11 @@ Plan limits live in `src/lib/billing/plans.ts`. Customers are created in Polar o
 
 **LinkedIn**: create an app with "Sign In with LinkedIn using OpenID Connect", callback `{APP_URL}/api/connect/linkedin/callback`. LinkedIn doesn't give third-party apps feed access, so LinkedIn runs in manual mode: paste posts into Rooms.
 
+**Claude**: an API key from console.anthropic.com in `ANTHROPIC_API_KEY`. `AI_MODEL` defaults to `claude-opus-5`. Credits per plan are in `src/lib/billing/plans.ts`; usage is recorded per user per month in `ai_usage`.
+
 **Email**: a Resend API key and a verified sending domain in `EMAIL_FROM`.
 
 **Social sign-in** (optional): Google and GitHub OAuth apps with callback `{APP_URL}/api/auth/callback/google` and `/github`.
-
-## Deploy
-
-**Vercel**: import the repo, set the environment variables, and run `npm run db:migrate` against the production database (locally or as a release step). `vercel.json` schedules `/api/cron/sync` every five minutes; Vercel sends `CRON_SECRET` as a bearer token.
-
-**Docker**: `docker compose up --build` runs Postgres, applies migrations and starts the app on port 3000. For your own host, build the `app` target and run the `migrate` target before each release. Call the sync endpoint from any scheduler:
-
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/sync
-```
-
-`/api/health` checks the database and is used by the container health check.
 
 ## Code map
 
@@ -84,8 +92,10 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/sync
 src/app/(marketing)     landing, pricing, privacy, terms
 src/app/(auth)          sign in, sign up, password reset
 src/app/welcome         two-step onboarding
-src/app/app             the product (Today, Rooms, Circles, Second Life, Storefront, Ledger, Settings)
-src/app/api             auth, connect/callback per platform, cron sync, export, health
+src/app/app             the product (Today, Inbox, Rooms, Circles, Second Life, Storefront, Ledger, Settings)
+src/app/api             auth, assistant stream, connect/callback per platform, cron, export, health
+src/lib/ai              Claude client and credits, tasks (voice, triage, drafts, briefs), assistant tools
+src/lib/autopilot.ts    the daily autonomous pass
 src/lib/providers       one adapter per platform behind a shared interface with capability flags
 src/lib/sync.ts         per-account sync: profile, posts, rooms, interactions, followers, attribution
 src/lib/scoring.ts      leverage, reply check, warmth, resurfacing, profile audit (unit tested)

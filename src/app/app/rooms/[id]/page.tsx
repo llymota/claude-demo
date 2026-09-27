@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Meter, Tag } from "@/components/ui";
 import { db, schema } from "@/lib/db";
 import { compact, duration, pct } from "@/lib/format";
+import { features } from "@/lib/env";
 import { providerFor } from "@/lib/providers";
 import { PLATFORM_LABEL } from "@/lib/providers/types";
 import { requireUser } from "@/lib/session";
@@ -33,6 +34,7 @@ export default async function RoomPage(props: PageProps<"/app/rooms/[id]">) {
         orderBy: desc(schema.post.likes),
       })
     : undefined;
+  const pendingDraft = await db.query.draft.findFirst({ where: and(eq(schema.draft.roomId, room.id), eq(schema.draft.status, "pending")) });
   const previous = await db.query.reply.findFirst({ where: eq(schema.reply.roomId, room.id), orderBy: desc(schema.reply.createdAt) });
   const ageMin = minutesSince(room.postedAt);
   const windowLeft = Math.max(0, Math.round((b?.windowMinutes ?? 0) - minutesSince(room.fetchedAt)));
@@ -79,12 +81,27 @@ export default async function RoomPage(props: PageProps<"/app/rooms/[id]">) {
                 planAllowsPost={viewer.limits.postFromTendril}
                 platform={PLATFORM_LABEL[account.platform]}
                 maxLength={account.platform === "x" ? 280 : account.platform === "bluesky" ? 300 : 500}
+                initialText={pendingDraft?.text}
+                initialRationale={pendingDraft?.rationale}
+                aiEnabled={features.ai()}
               />
             )}
           </div>
         </div>
 
         <aside className="flex flex-col gap-8">
+          {room.aiVerdict && (
+            <div className="border border-ink p-4">
+              <p className="label mb-2 !text-ink">Autopilot: {room.aiVerdict === "strong" ? "worth it" : room.aiVerdict === "maybe" ? "maybe" : "skip"}</p>
+              {room.aiReason && <p className="text-[13px]">{room.aiReason}</p>}
+              {room.aiAngle && (
+                <p className="mt-2 text-[13px] text-ink-2">
+                  <span className="font-medium text-ink">Your angle: </span>
+                  {room.aiAngle}
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <p className="label mb-3">Leverage {room.score}</p>
             {b && (

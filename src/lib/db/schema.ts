@@ -315,7 +315,7 @@ export const reply = pgTable(
   (t) => [index("reply_account_idx").on(t.accountId, t.createdAt)],
 );
 
-export const circleEnum = pgEnum("circle", ["anchor", "peer", "rising", "fan"]);
+export const circleEnum = pgEnum("circle_kind", ["anchor", "peer", "rising", "fan"]);
 
 export const person = pgTable(
   "person",

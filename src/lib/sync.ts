@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { credentialSaver, planFor, toRef } from "./accounts";
 import { attributeFollower, followDelta, type AttributionContext } from "./attribution";
 import { PLANS } from "./billing/plans";
@@ -344,4 +344,16 @@ export async function pruneOldData() {
   await db
     .delete(schema.room)
     .where(and(notInArray(schema.room.status, ["replied"]), lt(schema.room.postedAt, new Date(Date.now() - 14 * DAY))));
+}
+
+/** Syncs accounts past their plan interval, skipping any with a run already in flight. */
+export async function syncStale(accounts: { id: string; status: string; lastSyncedAt: Date | null }[], everyMinutes: number) {
+  const cutoff = Date.now() - everyMinutes * 60_000;
+  for (const a of accounts) {
+    if (a.status !== "active" || (a.lastSyncedAt && a.lastSyncedAt.getTime() > cutoff)) continue;
+    const running = await db.query.syncRun.findFirst({
+      where: and(eq(schema.syncRun.accountId, a.id), isNull(schema.syncRun.finishedAt), gt(schema.syncRun.startedAt, new Date(Date.now() - 10 * 60_000))),
+    });
+    if (!running) await syncAccount(a.id);
+  }
 }

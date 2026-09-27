@@ -6,30 +6,42 @@ import { ReplyDemo } from "./demo";
 const TOOLS = [
   {
     n: "01",
+    name: "Autopilot",
+    what: "Every morning it reads new conversations, hides bait and noise, drafts replies in your voice, and prepares check-ins and a reshare.",
+    why: "You wake up to a short Inbox, not a feed. You approve, edit or discard. Nothing posts without you.",
+  },
+  {
+    n: "02",
+    name: "Assistant",
+    what: "Press ⌘K and ask: who have I neglected, what earned me followers, draft a reply to Maya. It answers from your real data.",
+    why: "A strategist that has read every conversation, relationship and post you have, and never makes up a number.",
+  },
+  {
+    n: "03",
     name: "Rooms",
     what: "Live conversations on your topics, ranked by how many people will see a reply from you in the next hour.",
     why: "A thoughtful reply in a busy thread reaches more new people than most original posts.",
   },
   {
-    n: "02",
+    n: "04",
     name: "Circles",
     what: "The people who keep showing up for you, with warmth, reciprocity and who you've gone quiet on.",
     why: "Growth compounds through relationships. Tendril remembers so you don't have to.",
   },
   {
-    n: "03",
+    n: "05",
     name: "Second Life",
     what: "Your best past posts that most of your current followers have never seen, and when to reshare them.",
     why: "If you doubled your audience this year, half of them missed everything before.",
   },
   {
-    n: "04",
+    n: "06",
     name: "Storefront",
     what: "A plain audit of your bio and pinned post against the topics you want to be known for.",
     why: "Every reply sends people to your profile. It has three seconds to make the case.",
   },
   {
-    n: "05",
+    n: "07",
     name: "Ledger",
     what: "Where your new followers actually came from: which replies, which people, which resurfaced posts.",
     why: "So you do more of what works and stop guessing.",
@@ -44,8 +56,8 @@ const PLATFORMS = [
 ];
 
 const FAQ = [
-  { q: "Does Tendril post for me?", a: "Only when you press Post on a reply you wrote. There is no scheduling, no auto-replies and no automation of any kind." },
-  { q: "Does it write replies with AI?", a: "No. Replies written by a model are easy to spot and do nothing for your reputation. Tendril checks your reply and tells you what would make it land." },
+  { q: "Does Tendril post for me?", a: "Replies only go out when you approve them. The one optional exception is resharing your own best post once a day, which is off until you turn it on." },
+  { q: "Will the drafts sound like a bot?", a: "Tendril learns your voice from your own posts and grades every draft with the same reply check you see. Drafts that would land as generic are rewritten before you see them, and you edit before anything posts." },
   { q: "What does it read?", a: "Your posts, replies, mentions and follower changes on the accounts you connect, plus public posts matching your topics. Tokens are encrypted at rest." },
   { q: "Can I leave?", a: "Yes. Cancel from Settings, export your data, or delete your account. Deleting removes everything immediately." },
 ];
@@ -58,10 +70,10 @@ export default function Landing() {
   return (
     <>
       <section className="mx-auto max-w-5xl px-4 pt-20 pb-16 md:pt-28">
-        <p className="label">For people who already post enough</p>
+        <p className="label">Your growth team, minus the team</p>
         <h1 className="mt-4 max-w-3xl text-[40px] leading-[1.05] font-semibold md:text-[56px]">Grow without posting more.</h1>
         <p className="mt-5 max-w-xl text-[17px] text-ink-2">
-          Tendril finds the conversations worth joining, remembers the people who show up for you, and resurfaces the posts your new followers missed. Fifteen minutes a day.
+          Tendril works overnight: it finds the conversations worth joining, drafts replies in your voice, remembers the people who show up for you, and resurfaces the posts your new followers missed. You spend ten minutes approving.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Link href="/sign-up" className={buttonClass("primary", "lg")}>
@@ -77,8 +89,8 @@ export default function Landing() {
       <section id="how" className="border-t border-line">
         <div className="mx-auto max-w-5xl px-4 py-16">
           <div className="grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
-            <h2 className="text-[22px] font-semibold">Five tools, one daily round</h2>
-            <p className="max-w-xl text-ink-2">Each morning Tendril builds a short list: two or three rooms to reply in, a person to check in with, a post to reshare, one fix to your profile. Do it, tick it off, get on with your day.</p>
+            <h2 className="text-[22px] font-semibold">An assistant that does the legwork</h2>
+            <p className="max-w-xl text-ink-2">Each morning Tendril builds a short round: replies already drafted in your voice for the two or three rooms worth it, a person to check in with, a post to reshare, one fix to your profile. Review it, approve it, get on with your day.</p>
           </div>
           <ol className="mt-10 border-t border-ink">
             {TOOLS.map((t) => (
@@ -110,8 +122,8 @@ export default function Landing() {
           <div>
             <h2 className="text-[22px] font-semibold">What Tendril won&apos;t do</h2>
             <ul className="mt-5 flex flex-col gap-3 text-ink-2">
-              <li>Write posts or replies for you.</li>
-              <li>Schedule, automate, like, follow or unfollow on your behalf.</li>
+              <li>Post a reply you haven&apos;t approved.</li>
+              <li>Like, follow, unfollow or DM on your behalf.</li>
               <li>Sell or share your data. Ever.</li>
               <li>Show you numbers the platforms don&apos;t actually provide.</li>
             </ul>

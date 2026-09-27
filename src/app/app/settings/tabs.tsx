@@ -7,6 +7,7 @@ const TABS = [
   { href: "/app/settings", label: "Profile" },
   { href: "/app/settings/accounts", label: "Accounts" },
   { href: "/app/settings/topics", label: "Topics" },
+  { href: "/app/settings/autopilot", label: "Autopilot" },
   { href: "/app/settings/billing", label: "Billing" },
 ];
 

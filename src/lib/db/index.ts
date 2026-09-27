@@ -3,6 +3,8 @@ import postgres from "postgres";
 import { env } from "../env";
 import * as schema from "./schema";
 
+/* eslint-disable @typescript-eslint/no-require-imports -- the embedded database is loaded lazily so production never pulls in its WASM build */
+
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
 const globalForDb = globalThis as unknown as { __tendrilDb?: DB; __tendrilReady?: Promise<void> };
@@ -27,15 +29,27 @@ function create(): DB {
   return drizzle(sql, { schema, casing: "snake_case" });
 }
 
-/** One pool per process; reused across hot reloads in development. */
-export const db: DB = globalForDb.__tendrilDb ?? (globalForDb.__tendrilDb = create());
+const instance = () => globalForDb.__tendrilDb ?? (globalForDb.__tendrilDb = create());
+
+/**
+ * One pool per process, reused across hot reloads in development. Created on first use
+ * so importing this module (for example while Next collects routes at build time)
+ * never needs a database or secrets.
+ */
+export const db: DB = new Proxy({} as DB, {
+  get(_, prop) {
+    const real = instance();
+    const value = Reflect.get(real, prop, real);
+    return typeof value === "function" ? value.bind(real) : value;
+  },
+});
 
 /** Applies migrations to the embedded database. A no-op when DATABASE_URL is set (run `npm run db:migrate`). */
 export function ensureLocalDatabase() {
   if (env().DATABASE_URL) return Promise.resolve();
   globalForDb.__tendrilReady ??= (async () => {
     const { migrate } = require("drizzle-orm/pglite/migrator") as typeof import("drizzle-orm/pglite/migrator");
-    await migrate(db as never, { migrationsFolder: "./drizzle" });
+    await migrate(instance() as never, { migrationsFolder: "./drizzle" });
   })();
   return globalForDb.__tendrilReady;
 }

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ReplyCheck } from "@/components/reply-check";
 import { Button, Notice } from "@/components/ui";
-import { dismissRoom, sendReply, type ActionResult } from "../../actions";
+import { dismissRoom, draftForRoom, sendReply, type ActionResult } from "../../actions";
 
 const ANGLES = [
   { id: "number", name: "Add a number", hint: "One figure from your own work", starter: "In our numbers, " },
@@ -19,10 +19,15 @@ interface Props {
   planAllowsPost: boolean;
   platform: string;
   maxLength: number;
+  initialText?: string;
+  initialRationale?: string | null;
+  aiEnabled: boolean;
 }
 
-export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength }: Props) {
-  const [text, setText] = useState("");
+export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength, initialText, initialRationale, aiEnabled }: Props) {
+  const [text, setText] = useState(initialText ?? "");
+  const [rationale, setRationale] = useState<string | null>(initialRationale ?? null);
+  const [drafting, startDraft] = useTransition();
   const [angle, setAngle] = useState<string | null>(null);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [copied, setCopied] = useState(false);
@@ -61,10 +66,31 @@ export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength 
       </fieldset>
 
       <div>
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <label htmlFor="reply" className="label !text-ink">
-            Your reply
-          </label>
+        <div className="mb-1.5 flex items-baseline justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <label htmlFor="reply" className="label !text-ink">
+              Your reply
+            </label>
+            {aiEnabled && (
+              <button
+                type="button"
+                disabled={drafting}
+                className="text-[12px] underline underline-offset-2 disabled:opacity-50"
+                onClick={() =>
+                  startDraft(async () => {
+                    const r = await draftForRoom(roomId);
+                    if (r.ok && r.text) {
+                      setText(r.text);
+                      setRationale(r.rationale ?? null);
+                      setResult(null);
+                    } else setResult(r);
+                  })
+                }
+              >
+                {drafting ? "Drafting in your voice…" : text.trim() ? "Redraft in my voice" : "Draft in my voice"}
+              </button>
+            )}
+          </div>
           <span className={`num text-[12px] ${over ? "font-semibold text-ink" : "text-muted"}`}>
             {text.length}/{maxLength}
           </span>
@@ -75,9 +101,11 @@ export function Composer({ roomId, canPost, planAllowsPost, platform, maxLength 
           onChange={(e) => setText(e.target.value)}
           rows={6}
           className="field resize-y text-[15px] leading-relaxed"
-          placeholder="Write it in your own words. Tendril checks it; it never writes it."
+          placeholder="Write it yourself, or let Tendril draft one in your voice to edit. Nothing posts until you press Post."
         />
       </div>
+
+      {rationale && <p className="-mt-2 text-[12px] text-muted">Why this draft: {rationale}</p>}
 
       <ReplyCheck text={text} />
 

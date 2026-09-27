@@ -5,6 +5,11 @@ import { PLATFORM_LABEL } from "@/lib/providers/types";
 import { accountsFor, circles, completions, ledger, localDay, openRooms, secondLife, storefront } from "@/lib/queries";
 import { requireUser } from "@/lib/session";
 import { RoundCheck } from "./_components/round-check";
+import { AskButton } from "./_components/assistant";
+import { RunAutopilot } from "./_components/run-autopilot";
+import { and, count, eq } from "drizzle-orm";
+import { db, schema } from "@/lib/db";
+import { features } from "@/lib/env";
 
 export const metadata = { title: "Today" };
 
@@ -24,7 +29,8 @@ export default async function TodayPage() {
   const ids = accounts.map((a) => a.id);
   const day = localDay(viewer.workspace.timezone);
 
-  const [rooms, people, archive, done, led] = await Promise.all([
+  const [[{ inbox }], rooms, people, archive, done, led] = await Promise.all([
+    db.select({ inbox: count() }).from(schema.draft).where(and(eq(schema.draft.userId, viewer.user.id), eq(schema.draft.status, "pending"))),
     openRooms(viewer, ids),
     viewer.limits.circles ? circles(ids) : Promise.resolve({ people: [], nudges: [] }),
     viewer.limits.secondLife ? secondLife(accounts, viewer.workspace.topics) : Promise.resolve([]),
@@ -38,7 +44,7 @@ export default async function TodayPage() {
       kind: "Join a room",
       minutes: 3,
       title: `${r.authorName}: “${clip(r.text, 90)}”`,
-      meta: [`Leverage ${r.score}`, `Window ${duration(r.windowLeft)}`, `${pct(1 - r.audienceOverlap)} new to you`],
+      meta: [`Leverage ${r.score}`, `Window ${duration(r.windowLeft)}`, `${pct(1 - r.audienceOverlap)} new to you`, ...(r.aiVerdict === "strong" ? ["Autopilot: worth it"] : [])],
       href: `/app/rooms/${r.id}`,
       action: "Write reply",
     })),
@@ -93,6 +99,15 @@ export default async function TodayPage() {
           ? "Connect an account and Tendril will build your first round."
           : `${rooms.length} open ${rooms.length === 1 ? "room" : "rooms"} where people haven't met you yet. No new posts needed.`}
       </PageHeader>
+
+      {accounts.length > 0 && features.ai() && (
+        <AutopilotStrip
+          brief={viewer.workspace.morningBrief?.day === day ? viewer.workspace.morningBrief : null}
+          weekly={viewer.workspace.weeklyReview}
+          inbox={inbox}
+          allowed={viewer.limits.autopilot}
+        />
+      )}
 
       {accounts.length === 0 ? (
         <div className="pt-8">
@@ -168,6 +183,46 @@ export default async function TodayPage() {
         </>
       )}
     </>
+  );
+}
+
+function AutopilotStrip({ brief, weekly, inbox, allowed }: { brief: { headline: string; body: string } | null; weekly: { headline: string; body: string; day: string } | null; inbox: number; allowed: boolean }) {
+  return (
+    <div className="mt-8 grid border border-ink md:grid-cols-[minmax(0,1fr)_240px]">
+      <div className="p-5">
+        <p className="label !text-ink">Morning brief</p>
+        {brief ? (
+          <>
+            <p className="mt-2 text-[17px] font-semibold leading-snug">{brief.headline}</p>
+            <p className="mt-2 text-ink-2">{brief.body}</p>
+          </>
+        ) : allowed ? (
+          <p className="mt-2 text-ink-2">Autopilot hasn&apos;t run today yet. It runs each morning, or start it now.</p>
+        ) : (
+          <p className="mt-2 text-ink-2">
+            Autopilot triages rooms, drafts replies in your voice and writes this brief every morning.{" "}
+            <Link href="/app/settings/billing" className="underline underline-offset-2">
+              It&apos;s part of Grower.
+            </Link>
+          </p>
+        )}
+        {weekly && (
+          <details className="mt-4 border-t border-line pt-3 text-[13px]">
+            <summary className="cursor-pointer font-medium">Weekly review: {weekly.headline}</summary>
+            <p className="mt-2 text-ink-2">{weekly.body}</p>
+          </details>
+        )}
+        <div className="mt-4 flex flex-wrap gap-4">
+          <AskButton question="What should I focus on today, and why?">Ask about today</AskButton>
+          {allowed && !brief && <RunAutopilot />}
+        </div>
+      </div>
+      <Link href="/app/inbox" className="flex flex-col justify-between border-t border-ink p-5 transition hover:bg-subtle md:border-t-0 md:border-l">
+        <span className="label !text-ink">Inbox</span>
+        <span className="num mt-3 text-[40px] leading-none">{inbox}</span>
+        <span className="mt-2 text-[13px] text-ink-2">{inbox === 1 ? "draft waits" : "drafts wait"} for your approval →</span>
+      </Link>
+    </div>
   );
 }
 

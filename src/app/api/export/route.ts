@@ -23,6 +23,13 @@ export async function GET() {
   ]);
   const personIds = people.map((p) => p.id);
   const interactions = personIds.length ? await db.query.interaction.findMany({ where: inArray(schema.interaction.personId, personIds) }) : [];
+  const [drafts, threads, aiUsage] = await Promise.all([
+    db.query.draft.findMany({ where: eq(schema.draft.userId, userId) }),
+    db.query.aiThread.findMany({ where: eq(schema.aiThread.userId, userId) }),
+    db.query.aiUsage.findMany({ where: eq(schema.aiUsage.userId, userId) }),
+  ]);
+  const threadIds = threads.map((t) => t.id);
+  const aiMessages = threadIds.length ? await db.query.aiMessage.findMany({ where: inArray(schema.aiMessage.threadId, threadIds) }) : [];
   const body = {
     exportedAt: new Date().toISOString(),
     user: { id: userId, name: session.user.name, email: session.user.email, createdAt: session.user.createdAt },
@@ -36,6 +43,9 @@ export async function GET() {
     posts,
     followerSnapshots: snapshots,
     followAttribution: attribution,
+    drafts,
+    assistant: threads.map((t) => ({ ...t, messages: aiMessages.filter((m) => m.threadId === t.id) })),
+    aiUsage,
   };
   return new NextResponse(JSON.stringify(body, null, 2), {
     headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="tendril-export-${new Date().toISOString().slice(0, 10)}.json"` },
