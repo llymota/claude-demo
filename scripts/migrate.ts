@@ -1,11 +1,20 @@
-// Applies SQL migrations in ./drizzle. Run on every deploy before the app starts.
+// Applies SQL migrations in ./drizzle. Runs on every Vercel build (see "vercel-build").
+// Without DATABASE_URL it migrates the embedded development database instead.
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is not set");
-const sql = postgres(url, { max: 1 });
-await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
-await sql.end();
+if (url) {
+  const sql = postgres(url, { max: 1 });
+  await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
+  await sql.end();
+} else {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
+  const { migrate: migratePglite } = await import("drizzle-orm/pglite/migrator");
+  const client = new PGlite(".data/pglite");
+  await migratePglite(drizzlePglite({ client }), { migrationsFolder: "./drizzle" });
+  await client.close();
+}
 console.log("migrations applied");

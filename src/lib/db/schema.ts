@@ -127,6 +127,35 @@ export interface Topic {
   keywords: string[];
 }
 
+/** How the user writes, learned from their own posts. Drafts are written to match it. */
+export interface VoiceProfile {
+  summary: string;
+  traits: string[];
+  avoid: string[];
+  samples: string[];
+  learnedFrom: number;
+  learnedAt: string;
+}
+
+export interface AutopilotSettings {
+  enabled: boolean;
+  /** Reply drafts prepared per day. */
+  draftsPerDay: number;
+  /** Email the morning brief. */
+  digest: boolean;
+  /** Reshare the day's best Second Life pick without asking. Off by default; replies always need approval. */
+  autoReshare: boolean;
+}
+
+export const DEFAULT_AUTOPILOT: AutopilotSettings = { enabled: true, draftsPerDay: 3, digest: true, autoReshare: false };
+
+export interface Brief {
+  day: string;
+  headline: string;
+  body: string;
+  generatedAt: string;
+}
+
 export const workspace = pgTable("workspace", {
   userId: text("user_id")
     .primaryKey()
@@ -134,6 +163,11 @@ export const workspace = pgTable("workspace", {
   topics: jsonb("topics").$type<Topic[]>().notNull().default([]),
   timezone: text("timezone").notNull().default("UTC"),
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+  voice: jsonb("voice").$type<VoiceProfile | null>(),
+  autopilot: jsonb("autopilot").$type<AutopilotSettings>().notNull().default(DEFAULT_AUTOPILOT),
+  autopilotRanAt: timestamp("autopilot_ran_at", { withTimezone: true }),
+  morningBrief: jsonb("morning_brief").$type<Brief | null>(),
+  weeklyReview: jsonb("weekly_review").$type<Brief | null>(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -248,6 +282,11 @@ export const room = pgTable(
     breakdown: jsonb("breakdown").$type<{ fit: number; early: number; reach: number; rapport: number; windowMinutes: number }>(),
     manual: boolean("manual").notNull().default(false),
     status: roomStatusEnum("status").notNull().default("open"),
+    /** Autopilot's read of the room: worth it, maybe, or skip (bait, off-topic, hostile). */
+    aiVerdict: text("ai_verdict").$type<"strong" | "maybe" | "skip">(),
+    aiReason: text("ai_reason"),
+    /** The angle only this user can bring, drawn from their own posts. */
+    aiAngle: text("ai_angle"),
     fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: createdAt(),
   },
@@ -298,6 +337,8 @@ export const person = pgTable(
     pinnedCircle: boolean("pinned_circle").notNull().default(false),
     note: text("note"),
     lastGreetedAt: timestamp("last_greeted_at", { withTimezone: true }),
+    aiBrief: text("ai_brief"),
+    aiBriefAt: timestamp("ai_brief_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -387,4 +428,82 @@ export const auditEvent = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("audit_user_idx").on(t.userId, t.createdAt)],
+);
+
+/* ------------------------------------------------------------------ */
+/* AI: drafts, assistant, usage                                        */
+/* ------------------------------------------------------------------ */
+
+export const draftKindEnum = pgEnum("draft_kind", ["reply", "checkin", "reshare"]);
+export const draftStatusEnum = pgEnum("draft_status", ["pending", "posted", "discarded"]);
+
+/** Something Autopilot or the assistant prepared. Nothing here is posted until the user approves it. */
+export const draft = pgTable(
+  "draft",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => socialAccount.id, { onDelete: "cascade" }),
+    kind: draftKindEnum("kind").notNull(),
+    roomId: text("room_id").references(() => room.id, { onDelete: "cascade" }),
+    personId: text("person_id").references(() => person.id, { onDelete: "cascade" }),
+    postId: text("post_id").references(() => post.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    rationale: text("rationale"),
+    score: integer("score").notNull().default(0),
+    status: draftStatusEnum("status").notNull().default("pending"),
+    source: text("source").notNull().default("autopilot"),
+    resultUrl: text("result_url"),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("draft_user_idx").on(t.userId, t.status, t.createdAt), uniqueIndex("draft_room_unique").on(t.roomId, t.kind)],
+);
+
+export const aiThread = pgTable(
+  "ai_thread",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("New conversation"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("ai_thread_user_idx").on(t.userId, t.updatedAt)],
+);
+
+/** Assistant transcript. `content` is the Messages API content array, kept verbatim so turns replay exactly. */
+export const aiMessage = pgTable(
+  "ai_message",
+  {
+    id: id(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => aiThread.id, { onDelete: "cascade" }),
+    role: text("role").$type<"user" | "assistant">().notNull(),
+    content: jsonb("content").$type<unknown[]>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_message_thread_idx").on(t.threadId, t.createdAt)],
+);
+
+/** Metered AI work per user per month, checked against plan limits. */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    credits: integer("credits").notNull().default(0),
+    inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+    outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.month] })],
 );

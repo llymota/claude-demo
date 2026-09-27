@@ -8,3 +8,4 @@ dist-single
 .env
 next-env.d.ts
 coverage
+.data

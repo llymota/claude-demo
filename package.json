@@ -8,19 +8,22 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/copy-standalone.mjs",
-    "start": "node .next/standalone/server.js",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "vercel-build": "npm run db:migrate && next build"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@atproto/api": "^0.21.0",
     "@atproto/jwk-jose": "^0.2.4",
     "@atproto/oauth-client-node": "^0.5.7",
+    "@electric-sql/pglite": "^0.5.8",
     "@polar-sh/better-auth": "^1.8.4",
     "@polar-sh/sdk": "^0.47.1",
     "better-auth": "1.7",

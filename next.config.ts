@@ -10,8 +10,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  output: "standalone",
-  serverExternalPackages: ["postgres"],
+  serverExternalPackages: ["postgres", "@electric-sql/pglite"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "cdn.bsky.app" },

@@ -1,9 +1,12 @@
 import { defineConfig } from "drizzle-kit";
 
+const url = process.env.DATABASE_URL;
+
 export default defineConfig({
   schema: "./src/lib/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
-  dbCredentials: { url: process.env.DATABASE_URL ?? "postgres://tendril:tendril@localhost:5432/tendril" },
+  // Without DATABASE_URL, Studio opens the embedded development database.
+  ...(url ? { dbCredentials: { url } } : { driver: "pglite", dbCredentials: { url: "./.data/pglite" } }),
   strict: true,
 });

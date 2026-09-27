@@ -18,6 +18,10 @@ export interface PlanSpec {
     export: boolean;
     /** Minutes between background syncs. */
     syncMinutes: number;
+    /** Autopilot: room triage, drafts in your voice, morning brief. */
+    autopilot: boolean;
+    /** AI credits per month. One assistant turn or one draft is one credit. */
+    aiCredits: number;
   };
 }
 
@@ -27,24 +31,24 @@ export const PLANS: Record<Plan, PlanSpec> = {
     name: "Seedling",
     priceMonthly: 0,
     summary: "Try the daily round on one account.",
-    features: ["1 connected account", "5 rooms a day", "Reply check", "Storefront check"],
-    limits: { accounts: 1, roomsPerDay: 5, circles: false, secondLife: false, ledger: false, postFromTendril: false, export: false, syncMinutes: 360 },
+    features: ["1 connected account", "5 rooms a day", "Reply check and Storefront", "Assistant, 40 questions a month"],
+    limits: { accounts: 1, roomsPerDay: 5, circles: false, secondLife: false, ledger: false, postFromTendril: false, export: false, syncMinutes: 360, autopilot: false, aiCredits: 40 },
   },
   grower: {
     id: "grower",
     name: "Grower",
     priceMonthly: 19,
     summary: "Everything, for one person on every platform.",
-    features: ["Up to 4 accounts", "Unlimited rooms, synced every 15 minutes", "Circles, Second Life and Ledger", "Reply and reshare from Tendril"],
-    limits: { accounts: 4, roomsPerDay: Infinity, circles: true, secondLife: true, ledger: true, postFromTendril: true, export: false, syncMinutes: 15 },
+    features: ["Up to 4 accounts", "Autopilot: triage, drafts in your voice, morning brief", "Circles, Second Life and Ledger", "Unlimited rooms, reply and reshare from Tendril", "1,500 AI credits a month"],
+    limits: { accounts: 4, roomsPerDay: Infinity, circles: true, secondLife: true, ledger: true, postFromTendril: true, export: false, syncMinutes: 15, autopilot: true, aiCredits: 1500 },
   },
   studio: {
     id: "studio",
     name: "Studio",
     priceMonthly: 49,
     summary: "For a founder and their company, or a small team.",
-    features: ["Up to 12 accounts", "Everything in Grower", "CSV export of Circles and Ledger", "Priority sync"],
-    limits: { accounts: 12, roomsPerDay: Infinity, circles: true, secondLife: true, ledger: true, postFromTendril: true, export: true, syncMinutes: 15 },
+    features: ["Up to 12 accounts", "Everything in Grower", "5,000 AI credits a month", "CSV export of Circles and Ledger"],
+    limits: { accounts: 12, roomsPerDay: Infinity, circles: true, secondLife: true, ledger: true, postFromTendril: true, export: true, syncMinutes: 15, autopilot: true, aiCredits: 5000 },
   },
 };
 
